@@ -54,6 +54,11 @@ def main():
     # Launch Desktop GUI
     subparsers.add_parser("gui", help="Launch the Jev-AV Desktop Graphical User Interface")
 
+    # Scan URL / Link
+    url_parser = subparsers.add_parser("scan-url", help="Scan a website URL or download link for phishing and malware")
+    url_parser.add_argument("url", type=str, help="URL to inspect (e.g. https://suspicious-site.com/login)")
+    url_parser.add_argument("--no-probe", action="store_true", help="Skip network probe and perform static lexical inspection only")
+
     args = parser.parse_args()
 
     if not args.command or args.command == "demo":
@@ -109,6 +114,14 @@ def main():
         for f in files:
             scan_file(f, scanner)
             console.print("-" * 60)
+
+    elif args.command == "scan-url":
+        from url_scanner import JevURLScanner
+        from reporter import render_url_report
+        url_scanner = JevURLScanner()
+        console.print(f"[bold cyan]🔍 Extracting URL attributes and probing:[/bold cyan] {args.url}")
+        features, result = url_scanner.scan_url(args.url, probe_network=not args.no_probe)
+        render_url_report(features, result)
 
 if __name__ == "__main__":
     main()

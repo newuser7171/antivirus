@@ -125,3 +125,108 @@ def render_scan_report(features: Dict[str, Any], result: Dict[str, Any]):
     if probs:
         prob_str = " | ".join(f"{k}: {v*100:.1f}%" for k, v in probs.items())
         console.print(f"[dim]Alternative Disposition Distribution: {prob_str}[/dim]\n")
+
+
+def render_url_report(features: Dict[str, Any], result: Dict[str, Any]):
+    """Renders a comprehensive Rich terminal report for scanned URLs and links."""
+    from rich.markup import escape
+
+    url = features["normalized_url"]
+    hostname = features["hostname"]
+    verdict = result["verdict"]
+    conf = result["confidence"] * 100
+    score = result["threat_score"]
+    action = result["action"]
+
+    if action == "BLOCK":
+        banner_title = "🛑 MALICIOUS LINK DETECTED: ACCESS BLOCKED"
+        banner_style = "bold white on red"
+        v_color = "red"
+    elif action == "WARNING":
+        banner_title = "⚠️ SUSPICIOUS LINK: ELEVATED THREAT DETECTED"
+        banner_style = "bold black on yellow"
+        v_color = "yellow"
+    else:
+        banner_title = "✅ VERIFIED SAFE LINK: ALLOWED"
+        banner_style = "bold white on green"
+        v_color = "green"
+
+    console.print()
+    console.print(Panel(
+        f"[bold]{banner_title}[/bold]\n"
+        f"Target: [bold cyan]{escape(url[:80])}{'...' if len(url) > 80 else ''}[/bold cyan] | Action: [bold {v_color}]{action}[/bold {v_color}]",
+        style=banner_style
+    ))
+
+    # Details Table
+    url_table = Table(title="🌐 URL & Domain Attributes", box=None)
+    url_table.add_column("Attribute", style="cyan", width=22)
+    url_table.add_column("Value", style="white")
+
+    url_table.add_row("Hostname", escape(hostname))
+    url_table.add_row("Protocol / Port", f"{features['scheme'].upper()} (Port {features['port']})")
+    url_table.add_row("IP Address Host", "[bold red]YES (Host is raw IP)[/bold red]" if features["is_ip_address"] else "No (Domain name)")
+
+    if features.get("tld"):
+        tld_flag = " [bold red](High-risk abuse TLD)[/bold red]" if features["is_high_risk_tld"] else ""
+        url_table.add_row("Top-Level Domain", f"{features['tld']}{tld_flag}")
+
+    url_table.add_row("Domain Entropy", f"{features['domain_entropy']} / 8.00 {'[bold red](Randomized/DGA)[/bold red]' if features['is_high_entropy_domain'] else '[green](Normal)[/green]'}")
+
+    if features.get("phishing_keywords"):
+        url_table.add_row("Suspicious Keywords", f"[bold red]{', '.join(features['phishing_keywords'])}[/bold red]")
+
+    if features.get("has_payload_extension"):
+        url_table.add_row("Direct Payload Ext", f"[bold red]{features['payload_extension']}[/bold red]")
+
+    if features.get("has_open_redirect"):
+        url_table.add_row("Open Redirect Param", "[bold yellow]Detected redirect parameter in query[/bold yellow]")
+
+    net = features.get("network_probe", {})
+    if net.get("reachable"):
+        hops = net.get("redirect_count", 0)
+        final_u = net.get("final_url", url)
+        url_table.add_row("HTTP Status Code", str(net.get("status_code")))
+        if hops > 0:
+            url_table.add_row("Redirect Hops", f"{hops} hops -> {escape(final_u[:60])}")
+        url_table.add_row("Content-Type", str(net.get("content_type")))
+
+    console.print(Panel(url_table, border_style="cyan"))
+
+    # Jev Assessment Table
+    jev_table = Table(title="🧠 Jev System One Threat Assessment", box=None)
+    jev_table.add_column("Decision Dimension", style="cyan", width=25)
+    jev_table.add_column("Verdict / Score", style="white", width=20)
+    jev_table.add_column("Confidence / Probability", style="white")
+
+    jev_table.add_row(
+        "URL Classification (Choice)",
+        f"[{v_color}][bold]{verdict.upper()}[/bold][/{v_color}]",
+        f"{conf:.1f}% confidence"
+    )
+
+    score_bar = "█" * int(score * 20)
+    score_color = "red" if score >= 0.6 else "yellow" if score >= 0.35 else "green"
+    jev_table.add_row(
+        "Threat Score (0.0 - 1.0)",
+        f"[{score_color}]{score:.3f}[/{score_color}]",
+        f"[{score_color}]{score_bar:<20} {score*100:.1f}%[/{score_color}]"
+    )
+
+    # Noul Indicators
+    def add_noul_row(label, prob):
+        p_pct = prob * 100
+        p_color = "red" if prob > 0.50 else "yellow" if prob > 0.20 else "green"
+        bar = "█" * int(prob * 20)
+        flag = "🚨 ACTIVE" if prob > 0.50 else "⚠️ SUSPICIOUS" if prob > 0.20 else "CLEAN"
+        jev_table.add_row(
+            label,
+            f"[{p_color}]{flag}[/{p_color}]",
+            f"[{p_color}]{bar:<20} {p_pct:4.1f}%[/{p_color}]"
+        )
+
+    add_noul_row("Credential Phishing", result["is_phishing_probability"])
+    add_noul_row("Malware Dropper", result["is_malware_dropper_probability"])
+    add_noul_row("Access Block Decision", result["should_block_probability"])
+
+    console.print(Panel(jev_table, border_style="blue"))

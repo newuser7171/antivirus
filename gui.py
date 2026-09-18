@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from config import API_KEY, MODEL
 from feature_extractor import extract_features
 from jev_scanner import JevFileScanner
+from url_scanner import JevURLScanner
 from sentinel import RealTimeProtectionHandler
 from watchdog.observers import Observer
 
@@ -39,10 +40,14 @@ class JevAVGUI(ctk.CTk):
 
         # Core engine state
         self.scanner = JevFileScanner()
+        self.url_scanner = JevURLScanner()
         self.is_scanning = False
+        self.is_url_scanning = False
         self.current_scan_result: Optional[Dict[str, Any]] = None
         self.current_scan_features: Optional[Dict[str, Any]] = None
         self.current_file_path: Optional[Path] = None
+        self.current_url_features: Optional[Dict[str, Any]] = None
+        self.current_url_result: Optional[Dict[str, Any]] = None
 
         # Sentinel state
         self.sentinel_observer: Optional[Observer] = None
@@ -76,7 +81,7 @@ class JevAVGUI(ctk.CTk):
         """Builds modern left-hand navigation sidebar."""
         self.sidebar_frame = ctk.CTkFrame(self, width=220, corner_radius=0)
         self.sidebar_frame.grid(row=0, column=0, sticky="nsew")
-        self.sidebar_frame.grid_rowconfigure(8, weight=1)
+        self.sidebar_frame.grid_rowconfigure(9, weight=1)
 
         # Brand header
         self.logo_label = ctk.CTkLabel(
@@ -99,6 +104,7 @@ class JevAVGUI(ctk.CTk):
         views = [
             ("dashboard", "📊  Dashboard"),
             ("scanner", "🔍  File Scanner"),
+            ("link_scanner", "🔗  Link Scanner"),
             ("folder", "📁  Folder Scanner"),
             ("sentinel", "👁️  Sentinel Guard"),
             ("vault", "🗄️  Quarantine Vault"),
@@ -128,7 +134,7 @@ class JevAVGUI(ctk.CTk):
             font=ctk.CTkFont(size=12, weight="bold"),
             text_color="#2ecc71"
         )
-        self.status_badge.grid(row=9, column=0, padx=20, pady=(0, 8))
+        self.status_badge.grid(row=10, column=0, padx=20, pady=(0, 8))
 
         # Appearance mode selector
         self.appearance_menu = ctk.CTkOptionMenu(
@@ -137,7 +143,7 @@ class JevAVGUI(ctk.CTk):
             command=self.change_appearance_mode,
             height=28
         )
-        self.appearance_menu.grid(row=10, column=0, padx=20, pady=(0, 20), sticky="ew")
+        self.appearance_menu.grid(row=11, column=0, padx=20, pady=(0, 20), sticky="ew")
         self.appearance_menu.set("Dark")
 
     def setup_main_container(self):
@@ -151,6 +157,7 @@ class JevAVGUI(ctk.CTk):
         self.frames = {
             "dashboard": self.create_dashboard_view(),
             "scanner": self.create_scanner_view(),
+            "link_scanner": self.create_link_scanner_view(),
             "folder": self.create_folder_view(),
             "sentinel": self.create_sentinel_view(),
             "vault": self.create_vault_view(),
@@ -214,36 +221,46 @@ class JevAVGUI(ctk.CTk):
         # Quick Actions Row
         quick_frame = ctk.CTkFrame(view, corner_radius=10)
         quick_frame.grid(row=2, column=0, columnspan=4, sticky="ew", pady=(16, 16))
-        quick_frame.grid_columnconfigure((0, 1, 2), weight=1)
+        quick_frame.grid_columnconfigure((0, 1, 2, 3), weight=1)
 
         ctk.CTkButton(
             quick_frame,
-            text="🔍  Scan a File Now",
+            text="🔍  Scan a File",
             height=40,
             font=ctk.CTkFont(weight="bold"),
             command=lambda: self.select_view("scanner")
-        ).grid(row=0, column=0, padx=12, pady=12, sticky="ew")
+        ).grid(row=0, column=0, padx=8, pady=12, sticky="ew")
 
         ctk.CTkButton(
             quick_frame,
-            text="📁  Scan Downloads Folder",
+            text="🔗  Scan a Link / URL",
+            height=40,
+            font=ctk.CTkFont(weight="bold"),
+            fg_color="#0284c7",
+            hover_color="#0369a1",
+            command=lambda: self.select_view("link_scanner")
+        ).grid(row=0, column=1, padx=8, pady=12, sticky="ew")
+
+        ctk.CTkButton(
+            quick_frame,
+            text="📁  Scan Downloads",
             height=40,
             font=ctk.CTkFont(weight="bold"),
             fg_color="#059669",
             hover_color="#047857",
             command=self.quick_scan_downloads
-        ).grid(row=0, column=1, padx=12, pady=12, sticky="ew")
+        ).grid(row=0, column=2, padx=8, pady=12, sticky="ew")
 
         self.dash_guard_toggle_btn = ctk.CTkButton(
             quick_frame,
-            text="👁️  Activate Sentinel Shield",
+            text="👁️  Sentinel Shield",
             height=40,
             font=ctk.CTkFont(weight="bold"),
             fg_color="#7c3aed",
             hover_color="#6d28d9",
             command=self.toggle_sentinel_from_dashboard
         )
-        self.dash_guard_toggle_btn.grid(row=0, column=2, padx=12, pady=12, sticky="ew")
+        self.dash_guard_toggle_btn.grid(row=0, column=3, padx=8, pady=12, sticky="ew")
 
         # Recent Activity Feed
         recent_label = ctk.CTkLabel(
@@ -581,6 +598,316 @@ class JevAVGUI(ctk.CTk):
             parent = self.current_file_path.parent
             if parent.exists():
                 os.startfile(str(parent))
+
+    # =========================================================================
+    # VIEW: LINK SCANNER
+    # =========================================================================
+    def create_link_scanner_view(self) -> ctk.CTkFrame:
+        view = ctk.CTkFrame(self.container, fg_color="transparent")
+        view.grid_columnconfigure(0, weight=1)
+        view.grid_rowconfigure(3, weight=1)
+
+        # Header
+        header = ctk.CTkLabel(view, text="Universal Link & Website Threat Scanner", font=ctk.CTkFont(size=20, weight="bold"))
+        header.grid(row=0, column=0, sticky="w", pady=(0, 12))
+
+        # Selector Card
+        s_card = ctk.CTkFrame(view, corner_radius=10)
+        s_card.grid(row=1, column=0, sticky="ew", pady=(0, 14))
+        s_card.grid_columnconfigure(0, weight=1)
+
+        self.url_entry = ctk.CTkEntry(
+            s_card,
+            placeholder_text="Enter or paste any link (e.g. https://suspicious-site.com/login or download URL)...",
+            height=38
+        )
+        self.url_entry.grid(row=0, column=0, padx=(14, 8), pady=(14, 8), sticky="ew")
+
+        paste_btn = ctk.CTkButton(
+            s_card,
+            text="📋 Paste",
+            width=80,
+            height=38,
+            fg_color="gray30",
+            hover_color="gray40",
+            command=self.paste_url_from_clipboard
+        )
+        paste_btn.grid(row=0, column=1, padx=(0, 8), pady=(14, 8))
+
+        self.scan_url_btn = ctk.CTkButton(
+            s_card,
+            text="⚡ Analyze Link",
+            width=140,
+            height=38,
+            font=ctk.CTkFont(weight="bold"),
+            fg_color="#0284c7",
+            hover_color="#0369a1",
+            command=self.start_url_scan
+        )
+        self.scan_url_btn.grid(row=0, column=2, padx=(0, 14), pady=(14, 8))
+
+        # Options row inside card
+        opts_row = ctk.CTkFrame(s_card, fg_color="transparent")
+        opts_row.grid(row=1, column=0, columnspan=3, padx=14, pady=(0, 12), sticky="ew")
+
+        self.url_probe_switch = ctk.CTkSwitch(
+            opts_row,
+            text="Safe Network Probe (Unmask redirect chains & inspect HTTP headers)",
+            font=ctk.CTkFont(size=12)
+        )
+        self.url_probe_switch.grid(row=0, column=0, sticky="w")
+        self.url_probe_switch.select()
+
+        # Progress Frame
+        self.url_status_frame = ctk.CTkFrame(view, corner_radius=10)
+        self.url_status_frame.grid(row=2, column=0, sticky="ew", pady=(0, 14))
+        self.url_status_frame.grid_columnconfigure(0, weight=1)
+
+        self.url_status_label = ctk.CTkLabel(
+            self.url_status_frame,
+            text="Ready to inspect link. Paste any URL above.",
+            font=ctk.CTkFont(size=13)
+        )
+        self.url_status_label.grid(row=0, column=0, padx=14, pady=(10, 4), sticky="w")
+
+        self.url_progress_bar = ctk.CTkProgressBar(self.url_status_frame, height=10)
+        self.url_progress_bar.grid(row=1, column=0, padx=14, pady=(0, 12), sticky="ew")
+        self.url_progress_bar.set(0)
+
+        # Results Frame
+        self.url_results_frame = ctk.CTkFrame(view, corner_radius=10)
+        self.url_results_frame.grid(row=3, column=0, sticky="nsew")
+        self.url_results_frame.grid_columnconfigure((0, 1, 2), weight=1)
+        self.url_results_frame.grid_rowconfigure(2, weight=1)
+
+        # Verdict Header
+        self.url_verdict_badge = ctk.CTkLabel(
+            self.url_results_frame,
+            text="AWAITING LINK SCAN",
+            font=ctk.CTkFont(size=18, weight="bold"),
+            fg_color="gray25",
+            corner_radius=8,
+            padx=16,
+            pady=6
+        )
+        self.url_verdict_badge.grid(row=0, column=0, columnspan=2, padx=16, pady=16, sticky="w")
+
+        self.url_score_display_label = ctk.CTkLabel(
+            self.url_results_frame,
+            text="Threat Score: --",
+            font=ctk.CTkFont(size=16, weight="bold")
+        )
+        self.url_score_display_label.grid(row=0, column=2, padx=16, pady=16, sticky="e")
+
+        # Indicators row
+        ind_frame = ctk.CTkFrame(self.url_results_frame, fg_color="transparent")
+        ind_frame.grid(row=1, column=0, columnspan=3, padx=16, pady=(0, 12), sticky="ew")
+        ind_frame.grid_columnconfigure((0, 1, 2), weight=1)
+
+        self.card_phish = self._create_mini_indicator(ind_frame, 0, 0, "PHISHING RISK", "--")
+        self.card_dropper = self._create_mini_indicator(ind_frame, 0, 1, "MALWARE DROPPER", "--")
+        self.card_action = self._create_mini_indicator(ind_frame, 0, 2, "RECOMMENDED ACTION", "--")
+
+        # Details Textbox
+        self.url_features_textbox = ctk.CTkTextbox(
+            self.url_results_frame,
+            font=ctk.CTkFont(family="Consolas", size=12)
+        )
+        self.url_features_textbox.grid(row=2, column=0, columnspan=3, padx=16, pady=(0, 12), sticky="nsew")
+        self.url_features_textbox.insert("end", "Enter a URL and click 'Analyze Link' to view deep lexical and network telemetry.\n")
+        self.url_features_textbox.configure(state="disabled")
+
+        # Bottom Bar
+        action_bar = ctk.CTkFrame(self.url_results_frame, fg_color="transparent")
+        action_bar.grid(row=3, column=0, columnspan=3, padx=16, pady=(0, 14), sticky="ew")
+        action_bar.grid_columnconfigure(1, weight=1)
+
+        self.copy_url_btn = ctk.CTkButton(
+            action_bar,
+            text="📋 Copy Link",
+            width=120,
+            command=self.copy_current_url,
+            state="disabled"
+        )
+        self.copy_url_btn.grid(row=0, column=0, padx=(0, 8))
+
+        self.open_url_browser_btn = ctk.CTkButton(
+            action_bar,
+            text="🌐 Open Safely in Browser",
+            width=180,
+            fg_color="gray30",
+            hover_color="gray40",
+            command=self.open_current_url_in_browser,
+            state="disabled"
+        )
+        self.open_url_browser_btn.grid(row=0, column=1, sticky="w")
+
+        return view
+
+    def _create_mini_indicator(self, parent, row, col, title, initial_val):
+        card = ctk.CTkFrame(parent, corner_radius=8, fg_color=("gray85", "gray20"))
+        card.grid(row=row, column=col, padx=4, pady=2, sticky="nsew")
+        card.grid_columnconfigure(0, weight=1)
+        ctk.CTkLabel(card, text=title, font=ctk.CTkFont(size=10, weight="bold"), text_color="gray").grid(row=0, column=0, padx=8, pady=(6, 1))
+        val_lbl = ctk.CTkLabel(card, text=initial_val, font=ctk.CTkFont(size=14, weight="bold"))
+        val_lbl.grid(row=1, column=0, padx=8, pady=(0, 6))
+        return val_lbl
+
+    def paste_url_from_clipboard(self):
+        try:
+            clipboard_text = self.clipboard_get()
+            if clipboard_text:
+                self.url_entry.delete(0, "end")
+                self.url_entry.insert(0, clipboard_text.strip())
+        except Exception:
+            pass
+
+    def start_url_scan(self):
+        raw_url = self.url_entry.get().strip()
+        if not raw_url:
+            messagebox.showwarning("No URL Provided", "Please enter or paste a URL to analyze.")
+            return
+
+        probe = bool(self.url_probe_switch.get())
+        self.is_url_scanning = True
+        self.scan_url_btn.configure(state="disabled")
+        self.copy_url_btn.configure(state="disabled")
+        self.open_url_browser_btn.configure(state="disabled")
+        self.url_progress_bar.configure(mode="indeterminate")
+        self.url_progress_bar.start()
+        self.url_status_label.configure(text=f"Extracting lexical attributes and probing: {raw_url}...")
+
+        threading.Thread(target=self._url_scan_worker, args=(raw_url, probe), daemon=True).start()
+
+    def _url_scan_worker(self, raw_url: str, probe: bool):
+        try:
+            features, result = self.url_scanner.scan_url(raw_url, probe_network=probe)
+            self.after(0, self._url_scan_complete, raw_url, features, result)
+        except Exception as e:
+            self.after(0, self._url_scan_error, str(e))
+
+    def _url_scan_complete(self, raw_url: str, features: dict, result: dict):
+        self.is_url_scanning = False
+        self.url_progress_bar.stop()
+        self.url_progress_bar.configure(mode="determinate")
+        self.scan_url_btn.configure(state="normal")
+        self.copy_url_btn.configure(state="normal")
+        self.open_url_browser_btn.configure(state="normal")
+
+        self.current_url_features = features
+        self.current_url_result = result
+        self.stats["scanned"] += 1
+
+        action = result.get("action", "ALLOW")
+        verdict = result.get("verdict", "clean_benign")
+        score = result.get("threat_score", 0.0)
+        conf = result.get("confidence", 0.8)
+
+        self.url_progress_bar.set(score)
+
+        if action == "BLOCK":
+            badge_color = "#dc2626"
+            verdict_text = f"🛑 THREAT DETECTED: {verdict.upper()}"
+            self.stats["threats"] += 1
+        elif action == "WARNING":
+            badge_color = "#d97706"
+            verdict_text = f"⚠️ SUSPICIOUS LINK: {verdict.upper()}"
+            self.stats["threats"] += 1
+        else:
+            badge_color = "#16a34a"
+            verdict_text = "✅ CLEAN / SAFE LINK"
+            self.stats["clean"] += 1
+
+        self.url_verdict_badge.configure(text=verdict_text, fg_color=badge_color)
+        self.url_score_display_label.configure(text=f"Threat Score: {score:.3f} / 1.00 ({score*100:.1f}%)")
+        self.url_status_label.configure(text=f"Analysis complete for {features['hostname']}. Action: {action}")
+
+        # Update mini cards
+        p_prob = result.get("is_phishing_probability", 0.0)
+        d_prob = result.get("is_malware_dropper_probability", 0.0)
+        self.card_phish.configure(
+            text=f"{p_prob*100:.1f}% ({'HIGH' if p_prob>0.5 else 'LOW'})",
+            text_color="#ef4444" if p_prob>0.5 else ("#10b981" if p_prob<0.2 else "#f59e0b")
+        )
+        self.card_dropper.configure(
+            text=f"{d_prob*100:.1f}% ({'HIGH' if d_prob>0.5 else 'LOW'})",
+            text_color="#ef4444" if d_prob>0.5 else ("#10b981" if d_prob<0.2 else "#f59e0b")
+        )
+        self.card_action.configure(
+            text=action,
+            text_color="#ef4444" if action=="BLOCK" else ("#10b981" if action=="ALLOW" else "#f59e0b")
+        )
+
+        # Build feature text
+        txt = "=== JEV-AV LINK SECURITY TELEMETRY ===\n"
+        txt += f"Target URL:        {features['normalized_url']}\n"
+        txt += f"Hostname:          {features['hostname']}\n"
+        txt += f"Protocol:          {features['scheme'].upper()} (Port: {features['port']})\n"
+        txt += f"Is Raw IP Host:    {'YES' if features['is_ip_address'] else 'No'}\n"
+        if features.get("tld"):
+            txt += f"Top-Level Domain:  {features['tld']} {'(HIGH ABUSE RISK)' if features['is_high_risk_tld'] else ''}\n"
+        txt += f"Domain Entropy:    {features['domain_entropy']:.3f} (High Entropy: {features['is_high_entropy_domain']})\n"
+        if features.get("phishing_keywords"):
+            txt += f"Phishing Keywords: {', '.join(features['phishing_keywords'])}\n"
+        if features.get("has_payload_extension"):
+            txt += f"Direct Payload:    {features['payload_extension']}\n"
+        if features.get("has_open_redirect"):
+            txt += f"Open Redirect:     YES (Redirect parameter detected)\n"
+
+        net = features.get("network_probe", {})
+        if net.get("reachable"):
+            txt += f"\n=== NETWORK PROBE FINDINGS ===\n"
+            txt += f"HTTP Status:       {net.get('status_code')}\n"
+            txt += f"Redirect Hops:     {net.get('redirect_count')}\n"
+            if net.get("redirect_chain"):
+                txt += f"Redirect Chain:\n"
+                for idx, hop in enumerate(net["redirect_chain"], 1):
+                    txt += f"  [{idx}] {hop}\n"
+            txt += f"Content-Type:      {net.get('content_type')}\n"
+            txt += f"Server:            {net.get('server')}\n"
+
+        txt += f"\n=== JEV SYSTEM ONE REASONING ===\n"
+        txt += f"Classification:    {verdict} ({conf*100:.1f}% confidence)\n"
+        txt += f"Threat Score:      {score:.3f} / 1.00\n"
+        txt += f"Block Decision:    {action} (Block prob: {result.get('should_block_probability', 0.0)*100:.1f}%)\n"
+
+        self.url_features_textbox.configure(state="normal")
+        self.url_features_textbox.delete("1.0", "end")
+        self.url_features_textbox.insert("end", txt)
+        self.url_features_textbox.configure(state="disabled")
+
+        self.update_dashboard_stats()
+        self.log_activity(f"Scanned URL {features['hostname']}: {verdict_text} (Score: {score:.2f})")
+
+    def _url_scan_error(self, err_msg: str):
+        self.is_url_scanning = False
+        self.url_progress_bar.stop()
+        self.scan_url_btn.configure(state="normal")
+        self.url_status_label.configure(text=f"Error: {err_msg}")
+        messagebox.showerror("URL Scan Error", f"An error occurred while scanning URL:\n{err_msg}")
+
+    def copy_current_url(self):
+        if self.current_url_features:
+            self.clipboard_clear()
+            self.clipboard_append(self.current_url_features["normalized_url"])
+            messagebox.showinfo("Copied", "URL copied to clipboard.")
+
+    def open_current_url_in_browser(self):
+        if not self.current_url_features:
+            return
+        target = self.current_url_features["normalized_url"]
+        action = self.current_url_result.get("action", "ALLOW") if self.current_url_result else "ALLOW"
+
+        if action == "BLOCK":
+            confirm = messagebox.askyesno(
+                "⚠️ WARNING: HIGH RISK LINK",
+                f"This link was classified as MALICIOUS / PHISHING:\n\n{target}\n\nOpening it may compromise your credentials or computer.\n\nAre you sure you want to proceed?"
+            )
+            if not confirm:
+                return
+
+        import webbrowser
+        webbrowser.open(target)
 
     # =========================================================================
     # VIEW: FOLDER SCANNER

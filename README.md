@@ -1,12 +1,13 @@
 # Jev-AV: AI-Powered File Antivirus & Threat Triage Scanner
 
-A next-generation antivirus scanner and real-time defense sentinel powered by TypeSafe's **Jev** (`jev-latest`). Jev-AV inspects binary executables, scripts, documents, and plain text, extracting structural features (Shannon entropy, hashes, strings, PE imports/sections, PDF triggers, macros) and applying System One decision intelligence to deliver calibrated threat verdicts, severity scores, and automated quarantine actions.
+A next-generation antivirus scanner, URL threat intelligence engine, and real-time defense sentinel powered by TypeSafe's **Jev** (`jev-latest`). Jev-AV inspects binary executables, scripts, documents, plain text, and web links—extracting structural features (Shannon entropy, hashes, strings, PE imports/sections, PDF triggers, macros, domain lexical attributes, redirect chains) and applying System One decision intelligence to deliver calibrated threat verdicts, severity scores, and automated quarantine actions.
 
 ---
 
 ## Features
 
 * 🖥️ **Modern Cyber Desktop GUI**: Built with CustomTkinter (Windows 11 dark mode theme) featuring live threat score meters, real-time activity logs, and responsive multi-threading.
+* 🔗 **Universal Link & URL Scanner**: Inspects URLs for phishing portals, fake brand credential harvesting, direct malware droppers, and unmasks multi-hop redirect chains (e.g. `bit.ly`).
 * 👁️ **Sentinel Real-Time Shield**: Background watchdog folder protection that instantly intercepts newly downloaded or modified files.
 * 🗄️ **Quarantine Vault**: Isolates threats with cryptographic history logs, one-click file restoration, and permanent shredding.
 * 🧠 **TypeSafe System One Engine**: Leverages `Choice`, `Score`, and `Noul` primitives for sub-second calibrated judgments without hallucination risk.
@@ -32,17 +33,19 @@ jev-av-gui.bat
 ### GUI Highlights
 1. **Dashboard**: System protection health overview, real-time threat counters, and one-click quick actions.
 2. **File Scanner**: Single file analysis with animated progress bar, visual severity gauge (0–100%), classification badges, and granular feature breakdown.
-3. **Folder Scanner**: Recursive directory scanning with file-by-file live status streaming.
-4. **Sentinel Guard**: Toggle real-time background protection on your `Downloads` folder with an interactive alert feed.
-5. **Quarantine Vault**: Review neutralized files, inspect threat origins, or restore files safely.
-6. **Engine Settings**: Inspect API key status, select models, and adjust threat sensitivity thresholds (Strict, Balanced, Permissive).
+3. **Link Scanner**: Dedicated URL threat analyzer with "Paste from Clipboard", safe redirect-chain unmasking, phishing probability rating, and browser launch protection.
+4. **Folder Scanner**: Recursive directory scanning with file-by-file live status streaming.
+5. **Sentinel Guard**: Toggle real-time background protection on your `Downloads` folder with an interactive alert feed.
+6. **Quarantine Vault**: Review neutralized files, inspect threat origins, or restore files safely.
+7. **Engine Settings**: Inspect API key status, select models, and adjust threat sensitivity thresholds (Strict, Balanced, Permissive).
 
 ---
 
-## Supported File Formats (Universal Scanning)
+## Supported File Formats & Links
 
-Jev-AV supports deep static inspection and semantic evaluation across **all file types**:
+Jev-AV supports deep static inspection and semantic evaluation across **all file types & links**:
 
+* **Links & Web URLs** (`http://`, `https://`): Evaluates domain lexical features, IP-in-host, high-risk TLDs (`.xyz`, `.top`, `.click`), Shannon domain entropy (DGA), credential harvesting tokens, direct binary payload extensions, and follows redirect chains safely.
 * **Windows PE Executables & DLLs** (`.exe`, `.dll`, `.sys`): Section entropy analysis (`.upx`, `.aspack`) and sensitive imported APIs (process injection, memory tampering, network C2, registry persistence).
 * **Linux ELF Binaries** (`.elf`): Dynamic symbols, stripped status, and process control primitives (`ptrace`, `mprotect`, `execve`).
 * **Office Documents** (`.docx`, `.xlsx`, `.pptx`, `.docm`, `.xlsm`): VBA macro detection (`vbaProject.bin`), external template injection, and embedded payloads.
@@ -60,6 +63,7 @@ Jev-AV supports deep static inspection and semantic evaluation across **all file
 ### 1. Launch Desktop GUI
 ```bash
 python cli.py gui
+# or: jev-av gui
 ```
 
 ### 2. Scan an Individual File
@@ -71,17 +75,26 @@ python cli.py scan ./samples/test_dropper.ps1
 python cli.py scan C:\Windows\System32\notepad.exe
 ```
 
-### 3. Scan an Entire Directory
+### 3. Scan a URL or Link
+```bash
+# Scan a suspicious website:
+python cli.py scan-url https://suspicious-login-update.xyz/verify.php
+
+# Scan a direct download link:
+python cli.py scan-url http://example.com/payload.exe
+```
+
+### 4. Scan an Entire Directory
 ```bash
 python cli.py scan-dir C:\Users\newuser\Downloads --limit 10
 ```
 
-### 4. Run Real-Time Sentinel Guard
+### 5. Run Real-Time Sentinel Guard
 ```bash
 python cli.py watch C:\Users\newuser\Downloads
 ```
 
-### 5. Run Demo Suite
+### 6. Run Demo Suite
 ```bash
 python cli.py demo
 ```
