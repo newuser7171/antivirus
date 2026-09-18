@@ -1,0 +1,25 @@
+# Secrets & Environment
+.env
+.env.local
+.env.*.local
+
+# Byte-compiled / optimized files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# Antivirus Quarantine and logs
+quarantine/
+*.quarantined
+*.log
+
+# IDE & Editor settings
+.vscode/
+.idea/
+*.swp
+*.swo
