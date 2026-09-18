@@ -1,6 +1,41 @@
 # Jev-AV: AI-Powered File Antivirus & Threat Triage Scanner
 
-A static analysis antivirus scanner powered by TypeSafe's **Jev** (`jev-latest`). Jev-AV inspects binary executables, scripts, and documents, extracting structural features (Shannon entropy, hashes, strings, PE imports/sections) and applying System One decision intelligence to deliver calibrated threat verdicts, severity scores, and MITRE-aligned behavioral indicators.
+A next-generation antivirus scanner and real-time defense sentinel powered by TypeSafe's **Jev** (`jev-latest`). Jev-AV inspects binary executables, scripts, documents, and plain text, extracting structural features (Shannon entropy, hashes, strings, PE imports/sections, PDF triggers, macros) and applying System One decision intelligence to deliver calibrated threat verdicts, severity scores, and automated quarantine actions.
+
+---
+
+## Features
+
+* 🖥️ **Modern Cyber Desktop GUI**: Built with CustomTkinter (Windows 11 dark mode theme) featuring live threat score meters, real-time activity logs, and responsive multi-threading.
+* 👁️ **Sentinel Real-Time Shield**: Background watchdog folder protection that instantly intercepts newly downloaded or modified files.
+* 🗄️ **Quarantine Vault**: Isolates threats with cryptographic history logs, one-click file restoration, and permanent shredding.
+* 🧠 **TypeSafe System One Engine**: Leverages `Choice`, `Score`, and `Noul` primitives for sub-second calibrated judgments without hallucination risk.
+* 🌐 **Universal File Format Coverage**: Full structural inspection across PE, ELF, PDF, Office, LNK, Archives, Scripts, and Prompt Injections.
+
+---
+
+## Desktop GUI
+
+Launch the graphical dashboard with any of the following:
+
+```bash
+# Via Python:
+python gui.py
+
+# Via CLI:
+jev-av gui
+
+# Or double-click:
+jev-av-gui.bat
+```
+
+### GUI Highlights
+1. **Dashboard**: System protection health overview, real-time threat counters, and one-click quick actions.
+2. **File Scanner**: Single file analysis with animated progress bar, visual severity gauge (0–100%), classification badges, and granular feature breakdown.
+3. **Folder Scanner**: Recursive directory scanning with file-by-file live status streaming.
+4. **Sentinel Guard**: Toggle real-time background protection on your `Downloads` folder with an interactive alert feed.
+5. **Quarantine Vault**: Review neutralized files, inspect threat origins, or restore files safely.
+6. **Engine Settings**: Inspect API key status, select models, and adjust threat sensitivity thresholds (Strict, Balanced, Permissive).
 
 ---
 
@@ -16,16 +51,15 @@ Jev-AV supports deep static inspection and semantic evaluation across **all file
 * **Windows Shortcuts** (`.lnk`): Discovers command-line argument smuggling (`powershell -w hidden`, `mshta`, `cmd.exe`).
 * **Scripts & Code** (`.ps1`, `.bat`, `.vbs`, `.js`, `.py`, `.sh`, `.cmd`): Detects base64 encoding, download strings, and evasion parameters.
 * **Web & Markup** (`.html`, `.hta`, `.svg`, `.xml`): Script tag inspection, HTA applets, and redirect triggers.
-* **Text & Data** (`.json`, `.yaml`, `.txt`, `.csv`, `.ini`, `.cfg`): Shannon entropy and string extraction.
-* **Generic / Raw Binary**: Magic byte detection, high-entropy zone mapping, and URL/IP harvesting.
+* **Text & Data / LLM Prompts** (`.txt`, `.md`, `.json`): Evaluates for hidden Unicode exploits, bi-directional Trojan Source overrides, and adversarial prompt injections.
 
 ---
 
-## Usage
+## CLI Usage
 
-### 1. Run the Demo Suite
+### 1. Launch Desktop GUI
 ```bash
-python cli.py demo
+python cli.py gui
 ```
 
 ### 2. Scan an Individual File
@@ -39,5 +73,15 @@ python cli.py scan C:\Windows\System32\notepad.exe
 
 ### 3. Scan an Entire Directory
 ```bash
-python cli.py scan-dir C:\Path\To\Inspect
+python cli.py scan-dir C:\Users\newuser\Downloads --limit 10
+```
+
+### 4. Run Real-Time Sentinel Guard
+```bash
+python cli.py watch C:\Users\newuser\Downloads
+```
+
+### 5. Run Demo Suite
+```bash
+python cli.py demo
 ```

@@ -20,11 +20,12 @@ IGNORED_EXTENSIONS = {
 }
 
 class RealTimeProtectionHandler(FileSystemEventHandler):
-    def __init__(self, scanner: JevFileScanner, quarantine_dir: Path, auto_quarantine: bool = True):
+    def __init__(self, scanner: JevFileScanner, quarantine_dir: Path, auto_quarantine: bool = True, event_callback = None):
         super().__init__()
         self.scanner = scanner
         self.quarantine_dir = quarantine_dir
         self.auto_quarantine = auto_quarantine
+        self.event_callback = event_callback
         self.scanned_cache: Dict[str, float] = {} # path -> last_scanned_timestamp
         self.cooldown_seconds = 5.0
 
@@ -70,11 +71,22 @@ class RealTimeProtectionHandler(FileSystemEventHandler):
             return
 
         console.print(f"\n[bold yellow]⚡ [REAL-TIME DETECTED][/bold yellow] New or modified file: [cyan]{file_path.name}[/cyan]")
+        if self.event_callback:
+            try:
+                self.event_callback("detected", {"path": file_path, "name": file_path.name})
+            except Exception:
+                pass
         
         try:
             features = extract_features(file_path)
             result = self.scanner.scan_file_features(features)
             render_scan_report(features, result)
+
+            if self.event_callback:
+                try:
+                    self.event_callback("scanned", {"path": file_path, "name": file_path.name, "features": features, "result": result})
+                except Exception:
+                    pass
 
             if result["action"] == "QUARANTINE" and self.auto_quarantine:
                 self.quarantine_file(file_path, features, result)
@@ -84,6 +96,11 @@ class RealTimeProtectionHandler(FileSystemEventHandler):
             pass
         except Exception as e:
             console.print(f"[red]Error inspecting {file_path.name}: {e}[/red]")
+            if self.event_callback:
+                try:
+                    self.event_callback("error", {"path": file_path, "name": file_path.name, "error": str(e)})
+                except Exception:
+                    pass
 
     def quarantine_file(self, file_path: Path, features: dict, result: dict):
         self.quarantine_dir.mkdir(parents=True, exist_ok=True)
@@ -105,6 +122,12 @@ class RealTimeProtectionHandler(FileSystemEventHandler):
             log_file = self.quarantine_dir / "quarantine_history.log"
             with open(log_file, "a", encoding="utf-8") as f:
                 f.write(f"[{time.asctime()}] QUARANTINED: {file_path.name} | SHA256: {features['sha256']} | Severity: {result['severity_score']:.2f}\n")
+
+            if self.event_callback:
+                try:
+                    self.event_callback("quarantined", {"path": file_path, "name": file_path.name, "dest": target_dest, "features": features, "result": result})
+                except Exception:
+                    pass
 
         except Exception as e:
             console.print(f"[bold red]Failed to quarantine {file_path.name}: {e}[/bold red]")

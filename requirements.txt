@@ -3,3 +3,5 @@ python-dotenv>=1.0.0
 rich>=13.0.0
 pefile>=2024.8.26
 watchdog>=6.0.0
+customtkinter>=6.0.0
+darkdetect>=0.8.0

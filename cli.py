@@ -51,6 +51,9 @@ def main():
     # Run demo
     subparsers.add_parser("demo", help="Run scan on built-in sample files (clean vs suspicious)")
 
+    # Launch Desktop GUI
+    subparsers.add_parser("gui", help="Launch the Jev-AV Desktop Graphical User Interface")
+
     args = parser.parse_args()
 
     if not args.command or args.command == "demo":
@@ -66,6 +69,11 @@ def main():
         for sf in sample_files:
             scan_file(sf, scanner)
             console.print("=" * 80)
+        return
+
+    if args.command == "gui":
+        from gui import launch_gui
+        launch_gui()
         return
 
     scanner = JevFileScanner()
