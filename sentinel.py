@@ -1,3 +1,4 @@
+import sys
 import time
 import shutil
 from pathlib import Path
@@ -5,14 +6,21 @@ from typing import Set, Dict
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler, FileSystemEvent
 
+# Ensure safe UTF-8 output on Windows consoles
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+if hasattr(sys.stderr, "reconfigure"):
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 from rich.console import Console
 from rich.panel import Panel
+from rich.markup import escape
 
 from feature_extractor import extract_features
 from jev_scanner import JevFileScanner
 from reporter import render_scan_report
 
-console = Console()
+console = Console(highlight=False)
 
 IGNORED_EXTENSIONS = {
     ".tmp", ".crdownload", ".part", ".opdownload", ".download",
@@ -95,7 +103,7 @@ class RealTimeProtectionHandler(FileSystemEventHandler):
             # File still locked by another process, will catch on next event
             pass
         except Exception as e:
-            console.print(f"[red]Error inspecting {file_path.name}: {e}[/red]")
+            console.print(f"[red]Error inspecting {escape(file_path.name)}: {escape(str(e))}[/red]")
             if self.event_callback:
                 try:
                     self.event_callback("error", {"path": file_path, "name": file_path.name, "error": str(e)})
@@ -111,9 +119,9 @@ class RealTimeProtectionHandler(FileSystemEventHandler):
         try:
             shutil.move(str(file_path), str(target_dest))
             console.print(Panel(
-                f"[bold white on red]🛡️  AUTOMATIC QUARANTINE APPLIED[/bold]\n\n"
-                f"Threat Neutralized: [bold]{file_path.name}[/bold]\n"
-                f"Moved To: [dim]{target_dest}[/dim]\n"
+                f"[bold white on red]🛡️  AUTOMATIC QUARANTINE APPLIED[/]\n\n"
+                f"Threat Neutralized: [bold]{escape(file_path.name)}[/bold]\n"
+                f"Moved To: [dim]{escape(str(target_dest))}[/dim]\n"
                 f"Original SHA-256: [dim]{features['sha256']}[/dim]",
                 border_style="red"
             ))
@@ -130,7 +138,7 @@ class RealTimeProtectionHandler(FileSystemEventHandler):
                     pass
 
         except Exception as e:
-            console.print(f"[bold red]Failed to quarantine {file_path.name}: {e}[/bold red]")
+            console.print(f"[bold red]Failed to quarantine {escape(file_path.name)}: {escape(str(e))}[/bold red]")
 
 
 def start_sentinel(watch_path: Path, auto_quarantine: bool = True):
@@ -144,7 +152,7 @@ def start_sentinel(watch_path: Path, auto_quarantine: bool = True):
     observer.start()
 
     console.print(Panel(
-        f"[bold green]🛡️  JEV-AV REAL-TIME PROTECTION ACTIVATED[/bold green]\n\n"
+        f"[bold green]🛡️  JEV-AV REAL-TIME PROTECTION ACTIVATED[/]\n\n"
         f"• [bold]Monitoring Folder:[/bold] [cyan]{watch_path}[/cyan]\n"
         f"• [bold]Auto-Quarantine:[/bold] [{'green' if auto_quarantine else 'yellow'}]{'ENABLED (Moves threats to quarantine/)' if auto_quarantine else 'DISABLED (Alerts only)'}[/]\n"
         f"• [bold]Engine:[/bold] TypeSafe Jev System One (`jev-latest`)\n\n"
