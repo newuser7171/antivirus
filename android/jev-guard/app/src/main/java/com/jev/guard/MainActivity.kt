@@ -8,6 +8,7 @@ import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import java.security.MessageDigest
+import java.io.File
 
 class MainActivity : AppCompatActivity() {
     private lateinit var result: TextView
@@ -44,6 +45,34 @@ class MainActivity : AppCompatActivity() {
             }
         }
         val hash = md.digest().joinToString("") { "%02x".format(it) }
-        result.text = "File: $name\nSHA-256: $hash\n\nLocal inspection complete. Reputation/AI verdict: UNKNOWN (not configured)."
+        val temp = File.createTempFile("jev_scan_", ".apk", cacheDir)
+        contentResolver.openInputStream(uri)?.use { input ->
+            temp.outputStream().use { output -> input.copyTo(output) }
+        }
+        val report = ApkAnalyzer.analyze(this, temp)
+        temp.delete()
+        result.text = if (report == null) {
+            "File: $name\nSHA-256: $hash\n\nCould not parse APK metadata.\nCloud reputation: UNKNOWN"
+        } else {
+            buildString {
+                appendLine("File: $name")
+                appendLine("Package: " + report.packageName)
+                appendLine("Version: " + report.versionName)
+                appendLine("SHA-256: $hash")
+                appendLine()
+                appendLine("Heuristic score: " + report.riskScore + "/100")
+                appendLine("Verdict: " + report.verdict)
+                appendLine("Requested permissions: " + report.permissions.size)
+                appendLine("Flagged permissions: " + report.riskyPermissions.size)
+                report.riskyPermissions.forEach { appendLine(" • " + it) }
+                if (report.signerSha256.isNotEmpty()) {
+                    appendLine()
+                    appendLine("Signer SHA-256:")
+                    report.signerSha256.forEach { appendLine(it) }
+                }
+                appendLine()
+                append("Cloud reputation / AI verdict: UNKNOWN (not configured)")
+            }
+        }
     }
 }
