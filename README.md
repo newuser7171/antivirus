@@ -108,3 +108,15 @@ python cli.py scan-dir C:\Users\newuser\Downloads --limit 10
 ```bash
 python cli.py watch C:\Users\newuser\Downloads
 ```
+
+### 7. High-Speed Bulk Triage (Powered by classifier.dev / Jev System One)
+```bash
+# Bulk pre-filter thousands of folder files in 1 batch call:
+python cli.py bulk-files C:\Users\newuser\Downloads --deep-scan
+
+# Bulk triage hundreds of URLs or threat intel feeds:
+python cli.py bulk-urls https://domain1.com https://domain2.com/payload.exe urls.txt
+
+# Audit all running Windows system processes in 1 batch call (< 2 seconds):
+python cli.py bulk-edr --tier fast
+```
