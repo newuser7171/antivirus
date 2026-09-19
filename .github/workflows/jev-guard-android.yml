@@ -3,6 +3,7 @@ name: Build Jev Guard Android
 on:
   push:
     branches: [ main ]
+    tags: [ 'jev-guard-v*' ]
     paths:
       - 'android/jev-guard/**'
       - '.github/workflows/jev-guard-android.yml'
@@ -13,7 +14,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -32,8 +33,27 @@ jobs:
           gradle-version: '8.9'
       - name: Build debug APK
         run: gradle assembleDebug
-      - name: Upload APK
+      - name: Prepare APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/Jev-Guard-v0.1.0.apk
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: jev-guard-debug-apk
-          path: android/jev-guard/app/build/outputs/apk/debug/app-debug.apk
+          path: android/jev-guard/app/build/outputs/apk/debug/Jev-Guard-v0.1.0.apk
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/jev-guard-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Jev Guard v0.1.0
+          body: |
+            First experimental Android release of Jev Guard.
+
+            Features:
+            - APK file picker and local SHA-256 hashing
+            - APK package/version inspection
+            - Requested-permission analysis
+            - Suspicious-permission heuristic risk scoring
+            - Signing certificate SHA-256 fingerprints
+
+            Jev Guard is experimental. A low heuristic score does not guarantee that an APK is safe.
+          files: android/jev-guard/app/build/outputs/apk/debug/Jev-Guard-v0.1.0.apk
