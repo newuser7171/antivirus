@@ -17,6 +17,7 @@ from config import API_KEY, MODEL
 from feature_extractor import extract_features
 from jev_scanner import JevFileScanner
 from url_scanner import JevURLScanner
+from edr_monitor import JevEDRScanner, get_all_active_processes, terminate_process_by_pid, suspend_process_by_pid, resume_process_by_pid
 from sentinel import RealTimeProtectionHandler
 from watchdog.observers import Observer
 
@@ -41,13 +42,21 @@ class JevAVGUI(ctk.CTk):
         # Core engine state
         self.scanner = JevFileScanner()
         self.url_scanner = JevURLScanner()
+        self.edr_scanner = JevEDRScanner()
         self.is_scanning = False
         self.is_url_scanning = False
+        self.is_edr_scanning = False
         self.current_scan_result: Optional[Dict[str, Any]] = None
         self.current_scan_features: Optional[Dict[str, Any]] = None
         self.current_file_path: Optional[Path] = None
         self.current_url_features: Optional[Dict[str, Any]] = None
         self.current_url_result: Optional[Dict[str, Any]] = None
+
+        # EDR State
+        self.edr_cached_procs: List[Dict[str, Any]] = []
+        self.selected_proc_pid: Optional[int] = None
+        self.selected_proc_features: Optional[Dict[str, Any]] = None
+        self.selected_proc_result: Optional[Dict[str, Any]] = None
 
         # Sentinel state
         self.sentinel_observer: Optional[Observer] = None
@@ -81,7 +90,7 @@ class JevAVGUI(ctk.CTk):
         """Builds modern left-hand navigation sidebar."""
         self.sidebar_frame = ctk.CTkFrame(self, width=220, corner_radius=0)
         self.sidebar_frame.grid(row=0, column=0, sticky="nsew")
-        self.sidebar_frame.grid_rowconfigure(9, weight=1)
+        self.sidebar_frame.grid_rowconfigure(10, weight=1)
 
         # Brand header
         self.logo_label = ctk.CTkLabel(
@@ -105,6 +114,7 @@ class JevAVGUI(ctk.CTk):
             ("dashboard", "📊  Dashboard"),
             ("scanner", "🔍  File Scanner"),
             ("link_scanner", "🔗  Link Scanner"),
+            ("edr", "⚡  Live EDR"),
             ("folder", "📁  Folder Scanner"),
             ("sentinel", "👁️  Sentinel Guard"),
             ("vault", "🗄️  Quarantine Vault"),
@@ -134,7 +144,7 @@ class JevAVGUI(ctk.CTk):
             font=ctk.CTkFont(size=12, weight="bold"),
             text_color="#2ecc71"
         )
-        self.status_badge.grid(row=10, column=0, padx=20, pady=(0, 8))
+        self.status_badge.grid(row=11, column=0, padx=20, pady=(0, 8))
 
         # Appearance mode selector
         self.appearance_menu = ctk.CTkOptionMenu(
@@ -143,7 +153,7 @@ class JevAVGUI(ctk.CTk):
             command=self.change_appearance_mode,
             height=28
         )
-        self.appearance_menu.grid(row=11, column=0, padx=20, pady=(0, 20), sticky="ew")
+        self.appearance_menu.grid(row=12, column=0, padx=20, pady=(0, 20), sticky="ew")
         self.appearance_menu.set("Dark")
 
     def setup_main_container(self):
@@ -158,6 +168,7 @@ class JevAVGUI(ctk.CTk):
             "dashboard": self.create_dashboard_view(),
             "scanner": self.create_scanner_view(),
             "link_scanner": self.create_link_scanner_view(),
+            "edr": self.create_edr_view(),
             "folder": self.create_folder_view(),
             "sentinel": self.create_sentinel_view(),
             "vault": self.create_vault_view(),
@@ -908,6 +919,391 @@ class JevAVGUI(ctk.CTk):
 
         import webbrowser
         webbrowser.open(target)
+
+    # =========================================================================
+    # VIEW: LIVE EDR & PROCESS MONITOR
+    # =========================================================================
+    def create_edr_view(self) -> ctk.CTkFrame:
+        view = ctk.CTkFrame(self.container, fg_color="transparent")
+        view.grid_columnconfigure((0, 1), weight=1)
+        view.grid_rowconfigure(2, weight=1)
+
+        # Header
+        header = ctk.CTkLabel(view, text="Live Process & Memory EDR Monitor", font=ctk.CTkFont(size=20, weight="bold"))
+        header.grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 12))
+
+        # Top Control Bar Card
+        ctrl_card = ctk.CTkFrame(view, corner_radius=10)
+        ctrl_card.grid(row=1, column=0, columnspan=2, sticky="ew", pady=(0, 14))
+        ctrl_card.grid_columnconfigure(1, weight=1)
+
+        self.edr_refresh_btn = ctk.CTkButton(
+            ctrl_card,
+            text="🔄 Refresh Processes",
+            width=150,
+            height=36,
+            font=ctk.CTkFont(weight="bold"),
+            command=self.refresh_edr_processes
+        )
+        self.edr_refresh_btn.grid(row=0, column=0, padx=(14, 10), pady=12)
+
+        self.edr_search_entry = ctk.CTkEntry(
+            ctrl_card,
+            placeholder_text="Filter by Process Name or PID...",
+            height=36
+        )
+        self.edr_search_entry.grid(row=0, column=1, padx=(0, 10), pady=12, sticky="ew")
+        self.edr_search_entry.bind("<KeyRelease>", lambda e: self.filter_edr_processes())
+
+        self.edr_suspicious_only_switch = ctk.CTkSwitch(
+            ctrl_card,
+            text="Only Anomalies & Network Connections",
+            font=ctk.CTkFont(size=12, weight="bold"),
+            command=self.refresh_edr_processes
+        )
+        self.edr_suspicious_only_switch.grid(row=0, column=2, padx=(0, 14), pady=12)
+        self.edr_suspicious_only_switch.select()
+
+        # Left Column: Process List
+        list_container = ctk.CTkFrame(view, corner_radius=10)
+        list_container.grid(row=2, column=0, sticky="nsew", padx=(0, 8))
+        list_container.grid_columnconfigure(0, weight=1)
+        list_container.grid_rowconfigure(1, weight=1)
+
+        self.edr_list_title = ctk.CTkLabel(
+            list_container,
+            text="Active Monitored Processes (0)",
+            font=ctk.CTkFont(size=14, weight="bold")
+        )
+        self.edr_list_title.grid(row=0, column=0, padx=14, pady=(12, 6), sticky="w")
+
+        self.edr_proc_scroll = ctk.CTkScrollableFrame(list_container, corner_radius=8)
+        self.edr_proc_scroll.grid(row=1, column=0, padx=10, pady=(0, 10), sticky="nsew")
+        self.edr_proc_scroll.grid_columnconfigure(0, weight=1)
+
+        # Right Column: Deep Forensic & Telemetry Card
+        self.edr_detail_card = ctk.CTkFrame(view, corner_radius=10)
+        self.edr_detail_card.grid(row=2, column=1, sticky="nsew", padx=(8, 0))
+        self.edr_detail_card.grid_columnconfigure((0, 1, 2), weight=1)
+        self.edr_detail_card.grid_rowconfigure(3, weight=1)
+
+        self.edr_detail_header = ctk.CTkLabel(
+            self.edr_detail_card,
+            text="Select a process to inspect",
+            font=ctk.CTkFont(size=16, weight="bold")
+        )
+        self.edr_detail_header.grid(row=0, column=0, columnspan=3, padx=16, pady=(14, 4), sticky="w")
+
+        # Telemetry Verdict Badges
+        self.edr_verdict_badge = ctk.CTkLabel(
+            self.edr_detail_card,
+            text="AWAITING PROCESS SELECTION",
+            font=ctk.CTkFont(size=15, weight="bold"),
+            fg_color="gray25",
+            corner_radius=8,
+            padx=12,
+            pady=4
+        )
+        self.edr_verdict_badge.grid(row=1, column=0, columnspan=2, padx=16, pady=(0, 8), sticky="w")
+
+        self.edr_score_label = ctk.CTkLabel(
+            self.edr_detail_card,
+            text="Threat: --",
+            font=ctk.CTkFont(size=14, weight="bold")
+        )
+        self.edr_score_label.grid(row=1, column=2, padx=16, pady=(0, 8), sticky="e")
+
+        # Mini Indicators
+        ind_frame = ctk.CTkFrame(self.edr_detail_card, fg_color="transparent")
+        ind_frame.grid(row=2, column=0, columnspan=3, padx=16, pady=(0, 8), sticky="ew")
+        ind_frame.grid_columnconfigure((0, 1, 2), weight=1)
+
+        self.edr_c2_card = self._create_mini_indicator(ind_frame, 0, 0, "C2 BEACONING", "--")
+        self.edr_lolbin_card = self._create_mini_indicator(ind_frame, 0, 1, "LOLBIN ABUSE", "--")
+        self.edr_action_card = self._create_mini_indicator(ind_frame, 0, 2, "ACTION", "--")
+
+        # Forensic details textbox
+        self.edr_cmdline_box = ctk.CTkTextbox(self.edr_detail_card, font=ctk.CTkFont(family="Consolas", size=11))
+        self.edr_cmdline_box.grid(row=3, column=0, columnspan=3, padx=16, pady=(0, 12), sticky="nsew")
+        self.edr_cmdline_box.insert("end", "Click on any active process from the left list to run a live forensic inspection with Jev.\n")
+        self.edr_cmdline_box.configure(state="disabled")
+
+        # Process Action Bar
+        action_bar = ctk.CTkFrame(self.edr_detail_card, fg_color="transparent")
+        action_bar.grid(row=4, column=0, columnspan=3, padx=16, pady=(0, 14), sticky="ew")
+        action_bar.grid_columnconfigure(2, weight=1)
+
+        self.edr_kill_btn = ctk.CTkButton(
+            action_bar,
+            text="🛑 Terminate Process",
+            fg_color="#dc2626",
+            hover_color="#b91c1c",
+            command=self.edr_kill_selected,
+            state="disabled"
+        )
+        self.edr_kill_btn.grid(row=0, column=0, padx=(0, 8))
+
+        self.edr_suspend_btn = ctk.CTkButton(
+            action_bar,
+            text="⏸️ Suspend",
+            width=90,
+            fg_color="#d97706",
+            hover_color="#b45309",
+            command=self.edr_suspend_selected,
+            state="disabled"
+        )
+        self.edr_suspend_btn.grid(row=0, column=1, padx=(0, 8))
+
+        self.edr_resume_btn = ctk.CTkButton(
+            action_bar,
+            text="▶️ Resume",
+            width=90,
+            fg_color="gray30",
+            hover_color="gray40",
+            command=self.edr_resume_selected,
+            state="disabled"
+        )
+        self.edr_resume_btn.grid(row=0, column=2, sticky="w")
+
+        view.on_show = self.refresh_edr_processes
+        return view
+
+    def refresh_edr_processes(self):
+        if self.is_edr_scanning:
+            return
+        self.is_edr_scanning = True
+        self.edr_refresh_btn.configure(state="disabled")
+        self.edr_list_title.configure(text="Sweeping active Windows processes...")
+
+        suspicious_only = bool(self.edr_suspicious_only_switch.get())
+        threading.Thread(target=self._edr_fetch_worker, args=(suspicious_only,), daemon=True).start()
+
+    def _edr_fetch_worker(self, suspicious_only: bool):
+        try:
+            procs = get_all_active_processes(suspicious_only=suspicious_only)
+            self.after(0, self._edr_fetch_complete, procs)
+        except Exception as e:
+            self.after(0, self._edr_fetch_error, str(e))
+
+    def _edr_fetch_complete(self, procs: list):
+        self.is_edr_scanning = False
+        self.edr_refresh_btn.configure(state="normal")
+        self.edr_cached_procs = procs
+        self.filter_edr_processes()
+
+    def _edr_fetch_error(self, err_msg: str):
+        self.is_edr_scanning = False
+        self.edr_refresh_btn.configure(state="normal")
+        self.edr_list_title.configure(text=f"Error refreshing processes: {err_msg}")
+
+    def filter_edr_processes(self):
+        query = self.edr_search_entry.get().strip().lower()
+        
+        filtered = []
+        for p in self.edr_cached_procs:
+            if not query:
+                filtered.append(p)
+            elif query in p["name"].lower() or query in str(p["pid"]) or query in p.get("parent_name", "").lower():
+                filtered.append(p)
+
+        self.edr_list_title.configure(text=f"Active Monitored Processes ({len(filtered)})")
+
+        for widget in self.edr_proc_scroll.winfo_children():
+            widget.destroy()
+
+        if not filtered:
+            empty_lbl = ctk.CTkLabel(self.edr_proc_scroll, text="No processes match the selected criteria.", text_color="gray")
+            empty_lbl.grid(row=0, column=0, pady=20)
+            return
+
+        for idx, p in enumerate(filtered):
+            row_frame = ctk.CTkFrame(self.edr_proc_scroll, corner_radius=6)
+            row_frame.grid(row=idx, column=0, padx=4, pady=3, sticky="ew")
+            row_frame.grid_columnconfigure(1, weight=1)
+
+            # PID badge
+            pid_badge = ctk.CTkLabel(
+                row_frame,
+                text=f"{p['pid']}",
+                font=ctk.CTkFont(family="Consolas", size=11, weight="bold"),
+                fg_color="gray25",
+                corner_radius=4,
+                width=55
+            )
+            pid_badge.grid(row=0, column=0, padx=(8, 8), pady=6)
+
+            # Name and details
+            anomalies = []
+            if p.get("is_lolbin"):
+                anomalies.append("LOLBIN")
+            if p.get("is_suspicious_parent_spawn"):
+                anomalies.append("PARENT_ANOMALY")
+            if p.get("has_external_network"):
+                anomalies.append("NET_CONN")
+            if p.get("cmdline_anomalies"):
+                anomalies.extend(p["cmdline_anomalies"])
+
+            flag_txt = f" • [{', '.join(anomalies)}]" if anomalies else ""
+            desc = f"{p['name']} (Parent: {p.get('parent_name', 'System')}){flag_txt}"
+
+            lbl_color = "#f87171" if ("LOLBIN" in flag_txt or "ANOMALY" in flag_txt) else ("gray90", "gray10")
+            name_lbl = ctk.CTkLabel(
+                row_frame,
+                text=desc,
+                font=ctk.CTkFont(size=12, weight="bold" if anomalies else "normal"),
+                text_color=lbl_color,
+                anchor="w"
+            )
+            name_lbl.grid(row=0, column=1, sticky="w", pady=6)
+
+            # Inspect Button
+            btn = ctk.CTkButton(
+                row_frame,
+                text="Inspect",
+                width=70,
+                height=26,
+                fg_color="#0284c7",
+                hover_color="#0369a1",
+                command=lambda proc_dict=p: self.inspect_selected_proc(proc_dict)
+            )
+            btn.grid(row=0, column=2, padx=(6, 8), pady=6)
+
+    def inspect_selected_proc(self, proc_dict: dict):
+        self.selected_proc_pid = proc_dict["pid"]
+        self.selected_proc_features = proc_dict
+        self.edr_kill_btn.configure(state="normal")
+        self.edr_suspend_btn.configure(state="normal")
+        self.edr_resume_btn.configure(state="normal")
+
+        self.edr_detail_header.configure(text=f"Process: {proc_dict['name']} (PID: {proc_dict['pid']})")
+        self.edr_verdict_badge.configure(text="EVALUATING WITH JEV...", fg_color="#3b82f6")
+        self.edr_score_label.configure(text="Threat: Calculating...")
+
+        threading.Thread(target=self._edr_eval_worker, args=(proc_dict,), daemon=True).start()
+
+    def _edr_eval_worker(self, proc_dict: dict):
+        try:
+            result = self.edr_scanner._evaluate_process_features(proc_dict)
+            self.after(0, self._edr_eval_complete, proc_dict, result)
+        except Exception as e:
+            self.after(0, self._edr_eval_error, str(e))
+
+    def _edr_eval_complete(self, features: dict, result: dict):
+        self.selected_proc_result = result
+        verdict = result.get("verdict", "clean_user_app")
+        score = result.get("threat_score", 0.0)
+        action = result.get("action", "ALLOW")
+        conf = result.get("confidence", 0.8)
+
+        if action == "TERMINATE":
+            badge_color = "#dc2626"
+            verdict_text = f"🛑 HOSTILE THREAT: {verdict.upper()}"
+        elif action == "SOC_REVIEW":
+            badge_color = "#d97706"
+            verdict_text = f"⚠️ SUSPICIOUS ANOMALY: {verdict.upper()}"
+        else:
+            badge_color = "#16a34a"
+            verdict_text = f"✅ LEGITIMATE: {verdict.upper()}"
+
+        self.edr_verdict_badge.configure(text=verdict_text, fg_color=badge_color)
+        self.edr_score_label.configure(text=f"Threat Score: {score:.2f} / 1.00 ({score*100:.1f}%)")
+
+        # Mini Cards
+        c2 = result.get("is_c2_beaconing_probability", 0.0)
+        lol = result.get("is_living_off_the_land_probability", 0.0)
+        term = result.get("should_terminate_probability", 0.0)
+
+        self.edr_c2_card.configure(
+            text=f"{c2*100:.1f}% ({'HIGH' if c2>0.5 else 'LOW'})",
+            text_color="#ef4444" if c2>0.5 else ("#10b981" if c2<0.2 else "#f59e0b")
+        )
+        self.edr_lolbin_card.configure(
+            text=f"{lol*100:.1f}% ({'HIGH' if lol>0.5 else 'LOW'})",
+            text_color="#ef4444" if lol>0.5 else ("#10b981" if lol<0.2 else "#f59e0b")
+        )
+        self.edr_action_card.configure(
+            text=action,
+            text_color="#ef4444" if action=="TERMINATE" else ("#10b981" if action=="ALLOW" else "#f59e0b")
+        )
+
+        # Build detailed telemetry text
+        txt = f"=== LIVE EDR PROCESS TELEMETRY ===\n"
+        txt += f"Process Name:      {features['name']}\n"
+        txt += f"Process ID (PID):  {features['pid']}\n"
+        txt += f"Parent Name:       {features.get('parent_name', 'Unknown')} (PPID: {features.get('ppid', 0)})\n"
+        txt += f"Executable Path:   {features.get('exe_path', 'Unknown')}\n"
+        txt += f"Memory (RSS):      {features.get('memory', {}).get('rss_mb', 0)} MB\n"
+
+        conns = features.get("network_connections", [])
+        if conns:
+            txt += f"Network Sockets:\n"
+            for c in conns:
+                txt += f"  • {c['type']} -> {c['remote_ip']}:{c['remote_port']} ({c['status']})\n"
+        else:
+            txt += f"Network Sockets:   No active external connections\n"
+
+        if features.get("cmdline_anomalies"):
+            txt += f"Command Anomalies: {', '.join(features['cmdline_anomalies'])}\n"
+
+        txt += f"\nFull Command Line:\n{features.get('cmdline', 'N/A')}\n"
+
+        txt += f"\n=== JEV SYSTEM ONE REASONING ===\n"
+        txt += f"Classification:    {verdict} ({conf*100:.1f}% confidence)\n"
+        txt += f"Threat Score:      {score:.3f} / 1.00\n"
+        txt += f"Termination Prob:  {term*100:.1f}%\n"
+
+        self.edr_cmdline_box.configure(state="normal")
+        self.edr_cmdline_box.delete("1.0", "end")
+        self.edr_cmdline_box.insert("end", txt)
+        self.edr_cmdline_box.configure(state="disabled")
+
+        self.log_activity(f"EDR Inspected PID {features['pid']} ({features['name']}): {verdict_text} (Score: {score:.2f})")
+
+    def _edr_eval_error(self, err_msg: str):
+        self.edr_verdict_badge.configure(text="INSPECTION ERROR", fg_color="#dc2626")
+        self.edr_cmdline_box.configure(state="normal")
+        self.edr_cmdline_box.delete("1.0", "end")
+        self.edr_cmdline_box.insert("end", f"Error during process evaluation:\n{err_msg}")
+        self.edr_cmdline_box.configure(state="disabled")
+
+    def edr_kill_selected(self):
+        if not self.selected_proc_pid:
+            return
+        name = self.selected_proc_features.get("name", "Unknown") if self.selected_proc_features else "Process"
+        confirm = messagebox.askyesno(
+            "Confirm Process Termination",
+            f"Are you sure you want to terminate:\n\n{name} (PID: {self.selected_proc_pid})?\n\nThis will immediately stop execution."
+        )
+        if not confirm:
+            return
+
+        success, msg = terminate_process_by_pid(self.selected_proc_pid)
+        if success:
+            messagebox.showinfo("Terminated", msg)
+            self.log_activity(f"EDR Terminated {name} (PID: {self.selected_proc_pid})")
+            self.refresh_edr_processes()
+        else:
+            messagebox.showerror("Termination Failed", msg)
+
+    def edr_suspend_selected(self):
+        if not self.selected_proc_pid:
+            return
+        success, msg = suspend_process_by_pid(self.selected_proc_pid)
+        if success:
+            messagebox.showinfo("Suspended", msg)
+            self.log_activity(f"EDR Suspended PID {self.selected_proc_pid}")
+        else:
+            messagebox.showerror("Suspend Failed", msg)
+
+    def edr_resume_selected(self):
+        if not self.selected_proc_pid:
+            return
+        success, msg = resume_process_by_pid(self.selected_proc_pid)
+        if success:
+            messagebox.showinfo("Resumed", msg)
+            self.log_activity(f"EDR Resumed PID {self.selected_proc_pid}")
+        else:
+            messagebox.showerror("Resume Failed", msg)
 
     # =========================================================================
     # VIEW: FOLDER SCANNER

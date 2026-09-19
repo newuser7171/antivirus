@@ -59,6 +59,17 @@ def main():
     url_parser.add_argument("url", type=str, help="URL to inspect (e.g. https://suspicious-site.com/login)")
     url_parser.add_argument("--no-probe", action="store_true", help="Skip network probe and perform static lexical inspection only")
 
+    # EDR Process Commands
+    edr_ps_parser = subparsers.add_parser("edr-ps", help="List active running processes triaged by Jev System One")
+    edr_ps_parser.add_argument("--all", action="store_true", help="Include all benign system background processes")
+    edr_ps_parser.add_argument("--limit", type=int, default=15, help="Max processes to evaluate (default 15)")
+
+    edr_scan_parser = subparsers.add_parser("edr-scan", help="Deep forensic inspection of a running process by PID")
+    edr_scan_parser.add_argument("pid", type=int, help="Target Process ID (PID) to analyze")
+
+    edr_kill_parser = subparsers.add_parser("edr-kill", help="Safely terminate a hostile or compromised process by PID")
+    edr_kill_parser.add_argument("pid", type=int, help="Target Process ID (PID) to terminate")
+
     args = parser.parse_args()
 
     if not args.command or args.command == "demo":
@@ -122,6 +133,41 @@ def main():
         console.print(f"[bold cyan]🔍 Extracting URL attributes and probing:[/bold cyan] {args.url}")
         features, result = url_scanner.scan_url(args.url, probe_network=not args.no_probe)
         render_url_report(features, result)
+
+    elif args.command == "edr-ps":
+        from edr_monitor import JevEDRScanner, get_all_active_processes
+        from reporter import render_process_table
+        scanner = JevEDRScanner()
+        console.print("[bold cyan]🔍 Sweeping active Windows processes...[/bold cyan]")
+        procs = get_all_active_processes(suspicious_only=not args.all)
+        if args.limit and args.limit > 0:
+            procs = procs[:args.limit]
+        
+        items = []
+        for p in procs:
+            r = scanner._evaluate_process_features(p)
+            items.append({"features": p, "result": r})
+        items.sort(key=lambda x: x["result"]["threat_score"], reverse=True)
+        render_process_table(items)
+
+    elif args.command == "edr-scan":
+        from edr_monitor import JevEDRScanner
+        from reporter import render_process_report
+        scanner = JevEDRScanner()
+        try:
+            console.print(f"[bold cyan]🔍 Performing deep forensic inspection on PID {args.pid}...[/bold cyan]")
+            features, result = scanner.scan_process_by_pid(args.pid)
+            render_process_report(features, result)
+        except Exception as e:
+            console.print(f"[bold red]❌ EDR scan error:[/bold red] {e}")
+
+    elif args.command == "edr-kill":
+        from edr_monitor import terminate_process_by_pid
+        success, msg = terminate_process_by_pid(args.pid)
+        if success:
+            console.print(f"[bold green]✅ {msg}[/bold green]")
+        else:
+            console.print(f"[bold red]❌ {msg}[/bold red]")
 
 if __name__ == "__main__":
     main()

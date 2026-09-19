@@ -1,12 +1,13 @@
 # Jev-AV: AI-Powered File Antivirus & Threat Triage Scanner
 
-A next-generation antivirus scanner, URL threat intelligence engine, and real-time defense sentinel powered by TypeSafe's **Jev** (`jev-latest`). Jev-AV inspects binary executables, scripts, documents, plain text, and web links—extracting structural features (Shannon entropy, hashes, strings, PE imports/sections, PDF triggers, macros, domain lexical attributes, redirect chains) and applying System One decision intelligence to deliver calibrated threat verdicts, severity scores, and automated quarantine actions.
+A next-generation antivirus scanner, URL threat intelligence engine, and real-time **Endpoint Detection & Response (EDR)** sentinel powered by TypeSafe's **Jev** (`jev-latest`). Jev-AV inspects binary executables, running processes, scripts, documents, plain text, and web links—extracting structural features (Shannon entropy, hashes, strings, PE imports/sections, PDF triggers, macros, process lineage, LOLBIN arguments, network sockets) and applying System One decision intelligence to deliver calibrated threat verdicts, severity scores, and automated protection actions.
 
 ---
 
 ## Features
 
 * 🖥️ **Modern Cyber Desktop GUI**: Built with CustomTkinter (Windows 11 dark mode theme) featuring live threat score meters, real-time activity logs, and responsive multi-threading.
+* ⚡ **Live Process & Memory EDR**: Real-time Windows process triage, parent-child anomaly detection (e.g. Office/Browser spawning PowerShell/CMD), LOLBIN abuse recognition, active network socket monitoring, and one-click process termination.
 * 🔗 **Universal Link & URL Scanner**: Inspects URLs for phishing portals, fake brand credential harvesting, direct malware droppers, and unmasks multi-hop redirect chains (e.g. `bit.ly`).
 * 👁️ **Sentinel Real-Time Shield**: Background watchdog folder protection that instantly intercepts newly downloaded or modified files.
 * 🗄️ **Quarantine Vault**: Isolates threats with cryptographic history logs, one-click file restoration, and permanent shredding.
@@ -34,17 +35,19 @@ jev-av-gui.bat
 1. **Dashboard**: System protection health overview, real-time threat counters, and one-click quick actions.
 2. **File Scanner**: Single file analysis with animated progress bar, visual severity gauge (0–100%), classification badges, and granular feature breakdown.
 3. **Link Scanner**: Dedicated URL threat analyzer with "Paste from Clipboard", safe redirect-chain unmasking, phishing probability rating, and browser launch protection.
-4. **Folder Scanner**: Recursive directory scanning with file-by-file live status streaming.
-5. **Sentinel Guard**: Toggle real-time background protection on your `Downloads` folder with an interactive alert feed.
-6. **Quarantine Vault**: Review neutralized files, inspect threat origins, or restore files safely.
-7. **Engine Settings**: Inspect API key status, select models, and adjust threat sensitivity thresholds (Strict, Balanced, Permissive).
+4. **Live EDR**: Real-time Windows process monitor. Displays active processes, lineage anomalies, network connections, and Jev threat scores with one-click **Terminate** and **Suspend** controls.
+5. **Folder Scanner**: Recursive directory scanning with file-by-file live status streaming.
+6. **Sentinel Guard**: Toggle real-time background protection on your `Downloads` folder with an interactive alert feed.
+7. **Quarantine Vault**: Review neutralized files, inspect threat origins, or restore files safely.
+8. **Engine Settings**: Inspect API key status, select models, and adjust threat sensitivity thresholds (Strict, Balanced, Permissive).
 
 ---
 
-## Supported File Formats & Links
+## Supported File Formats, Links & Processes
 
-Jev-AV supports deep static inspection and semantic evaluation across **all file types & links**:
+Jev-AV supports deep static inspection and semantic evaluation across **all domains**:
 
+* **Running Windows Processes (EDR)**: Process lineage (PPID), parentage anomalies (Office/Browser spawning command interpreters), Living-off-the-Land Binaries (LOLBINs), masquerading system binaries outside `System32`, command-line obfuscation, memory RSS, and active outbound TCP/UDP sockets.
 * **Links & Web URLs** (`http://`, `https://`): Evaluates domain lexical features, IP-in-host, high-risk TLDs (`.xyz`, `.top`, `.click`), Shannon domain entropy (DGA), credential harvesting tokens, direct binary payload extensions, and follows redirect chains safely.
 * **Windows PE Executables & DLLs** (`.exe`, `.dll`, `.sys`): Section entropy analysis (`.upx`, `.aspack`) and sensitive imported APIs (process injection, memory tampering, network C2, registry persistence).
 * **Linux ELF Binaries** (`.elf`): Dynamic symbols, stripped status, and process control primitives (`ptrace`, `mprotect`, `execve`).
@@ -66,13 +69,16 @@ python cli.py gui
 # or: jev-av gui
 ```
 
-### 2. Scan an Individual File
+### 2. Live Process EDR Triage
 ```bash
-# Scan a script:
-python cli.py scan ./samples/test_dropper.ps1
+# Sweep running processes and display Jev threat triage:
+python cli.py edr-ps
 
-# Scan an executable:
-python cli.py scan C:\Windows\System32\notepad.exe
+# Deep forensic inspection of a specific process by PID:
+python cli.py edr-scan 1234
+
+# Safely terminate a hostile or compromised process:
+python cli.py edr-kill 1234
 ```
 
 ### 3. Scan a URL or Link
@@ -84,17 +90,21 @@ python cli.py scan-url https://suspicious-login-update.xyz/verify.php
 python cli.py scan-url http://example.com/payload.exe
 ```
 
-### 4. Scan an Entire Directory
+### 4. Scan an Individual File
+```bash
+# Scan a script:
+python cli.py scan ./samples/test_dropper.ps1
+
+# Scan an executable:
+python cli.py scan C:\Windows\System32\notepad.exe
+```
+
+### 5. Scan an Entire Directory
 ```bash
 python cli.py scan-dir C:\Users\newuser\Downloads --limit 10
 ```
 
-### 5. Run Real-Time Sentinel Guard
+### 6. Run Real-Time Sentinel Guard
 ```bash
 python cli.py watch C:\Users\newuser\Downloads
-```
-
-### 6. Run Demo Suite
-```bash
-python cli.py demo
 ```

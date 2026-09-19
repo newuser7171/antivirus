@@ -230,3 +230,155 @@ def render_url_report(features: Dict[str, Any], result: Dict[str, Any]):
     add_noul_row("Access Block Decision", result["should_block_probability"])
 
     console.print(Panel(jev_table, border_style="blue"))
+
+
+def render_process_report(features: Dict[str, Any], result: Dict[str, Any]):
+    """Renders a comprehensive Rich terminal report for a running process."""
+    from rich.markup import escape
+
+    pid = features["pid"]
+    name = features["name"]
+    verdict = result["verdict"]
+    conf = result["confidence"] * 100
+    score = result["threat_score"]
+    action = result["action"]
+
+    if action == "TERMINATE":
+        banner_title = "🛑 HOSTILE PROCESS DETECTED: TERMINATION RECOMMENDED"
+        banner_style = "bold white on red"
+        v_color = "red"
+    elif action == "SOC_REVIEW":
+        banner_title = "⚠️ SUSPICIOUS PROCESS ANOMALY: INVESTIGATION REQUIRED"
+        banner_style = "bold black on yellow"
+        v_color = "yellow"
+    else:
+        banner_title = "✅ LEGITIMATE PROCESS: NORMAL OPERATION"
+        banner_style = "bold white on green"
+        v_color = "green"
+
+    console.print()
+    console.print(Panel(
+        f"[bold]{banner_title}[/bold]\n"
+        f"Process: [bold cyan]{escape(name)}[/bold cyan] (PID: [bold]{pid}[/bold]) | Action: [bold {v_color}]{action}[/bold {v_color}]",
+        style=banner_style
+    ))
+
+    # Process Attributes Table
+    proc_table = Table(title="⚙️ Process Telemetry & Lineage", box=None)
+    proc_table.add_column("Attribute", style="cyan", width=22)
+    proc_table.add_column("Value", style="white")
+
+    proc_table.add_row("Process Name (PID)", f"{escape(name)} ({pid})")
+    proc_table.add_row("Executable Path", escape(features.get("exe_path", "Unknown")))
+    proc_table.add_row("Parent Process (PPID)", f"{escape(features.get('parent_name', 'Unknown'))} (PPID: {features.get('ppid', 0)})")
+
+    if features.get("is_suspicious_parent_spawn"):
+        proc_table.add_row("Lineage Anomaly", "[bold red]SUSPICIOUS: Spawned by Office / Browser / Server[/bold red]")
+    if features.get("is_masquerading_system_binary"):
+        proc_table.add_row("Masquerading", "[bold red]CRITICAL: System binary running outside System32[/bold red]")
+    if features.get("is_lolbin"):
+        proc_table.add_row("LOLBIN Utility", "[bold yellow]Windows Administrative Binary (Dual-Use)[/bold yellow]")
+
+    if features.get("cmdline_anomalies"):
+        proc_table.add_row("Command Anomalies", f"[bold red]{', '.join(features['cmdline_anomalies'])}[/bold red]")
+
+    cmdline_display = escape(features.get("cmdline", ""))
+    if len(cmdline_display) > 90:
+        cmdline_display = cmdline_display[:87] + "..."
+    proc_table.add_row("Command Line", cmdline_display or "[dim]N/A[/dim]")
+
+    mem = features.get("memory", {})
+    proc_table.add_row("Memory RSS", f"{mem.get('rss_mb', 0)} MB")
+
+    conns = features.get("network_connections", [])
+    if conns:
+        conn_str = "; ".join(f"{c['type']} -> {c['remote_ip']}:{c['remote_port']} ({c['status']})" for c in conns[:3])
+        proc_table.add_row("Network Sockets", f"[bold red]{conn_str}[/bold red]")
+    else:
+        proc_table.add_row("Network Sockets", "No active external TCP/UDP connections")
+
+    console.print(Panel(proc_table, border_style="cyan"))
+
+    # Jev Assessment Table
+    jev_table = Table(title="🧠 Jev System One Threat Assessment", box=None)
+    jev_table.add_column("Decision Dimension", style="cyan", width=25)
+    jev_table.add_column("Verdict / Score", style="white", width=20)
+    jev_table.add_column("Confidence / Probability", style="white")
+
+    jev_table.add_row(
+        "Process Verdict (Choice)",
+        f"[{v_color}][bold]{verdict.upper()}[/bold][/{v_color}]",
+        f"{conf:.1f}% confidence"
+    )
+
+    score_bar = "█" * int(score * 20)
+    score_color = "red" if score >= 0.6 else "yellow" if score >= 0.35 else "green"
+    jev_table.add_row(
+        "Threat Score (0.0 - 1.0)",
+        f"[{score_color}]{score:.3f}[/{score_color}]",
+        f"[{score_color}]{score_bar:<20} {score*100:.1f}%[/{score_color}]"
+    )
+
+    def add_noul_row(label, prob):
+        p_pct = prob * 100
+        p_color = "red" if prob > 0.50 else "yellow" if prob > 0.20 else "green"
+        bar = "█" * int(prob * 20)
+        flag = "🚨 ACTIVE" if prob > 0.50 else "⚠️ SUSPICIOUS" if prob > 0.20 else "CLEAN"
+        jev_table.add_row(
+            label,
+            f"[{p_color}]{flag}[/{p_color}]",
+            f"[{p_color}]{bar:<20} {p_pct:4.1f}%[/{p_color}]"
+        )
+
+    add_noul_row("C2 Beacon / Download", result.get("is_c2_beaconing_probability", 0.0))
+    add_noul_row("LOLBIN Abuse", result.get("is_living_off_the_land_probability", 0.0))
+    add_noul_row("Terminate Decision", result.get("should_terminate_probability", 0.0))
+
+    console.print(Panel(jev_table, border_style="blue"))
+
+
+def render_process_table(items: List[Dict[str, Any]]):
+    """Renders an interactive overview table of running processes triaged by Jev."""
+    from rich.markup import escape
+
+    table = Table(title="⚡ Active Running Processes Triage", box=None)
+    table.add_column("PID", style="cyan", width=8)
+    table.add_column("Process Name", style="white", width=22)
+    table.add_column("Verdict", style="white", width=18)
+    table.add_column("Threat Score", style="white", width=14)
+    table.add_column("Action", style="white", width=12)
+    table.add_column("Lineage / Flags", style="dim")
+
+    for item in items:
+        f = item["features"]
+        r = item["result"]
+        act = r["action"]
+        sev = r["threat_score"]
+
+        color = "red" if act == "TERMINATE" else "yellow" if act == "SOC_REVIEW" else "green"
+
+        flags = []
+        if f.get("is_lolbin"):
+            flags.append("LOLBIN")
+        if f.get("is_suspicious_parent_spawn"):
+            flags.append("ANOMALOUS_PARENT")
+        if f.get("is_masquerading_system_binary"):
+            flags.append("MASQUERADING")
+        if f.get("cmdline_anomalies"):
+            flags.extend(f["cmdline_anomalies"])
+        if f.get("has_external_network"):
+            flags.append("NET_CONN")
+
+        flag_str = ", ".join(flags) if flags else f"Parent: {f.get('parent_name', 'System')}"
+
+        table.add_row(
+            str(f["pid"]),
+            escape(f["name"]),
+            f"[{color}]{r['verdict'].upper()}[/{color}]",
+            f"[{color}]{sev:.2f}[/{color}]",
+            f"[{color}][bold]{act}[/bold][/{color}]",
+            escape(flag_str)
+        )
+
+    console.print(Panel(table, border_style="cyan"))
+

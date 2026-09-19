@@ -5,3 +5,5 @@ pefile>=2024.8.26
 watchdog>=6.0.0
 customtkinter>=6.0.0
 darkdetect>=0.8.0
+psutil>=7.0.0
+httpx>=0.28.0
