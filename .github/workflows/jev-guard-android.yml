@@ -1,0 +1,39 @@
+name: Build Jev Guard Android
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'android/jev-guard/**'
+      - '.github/workflows/jev-guard-android.yml'
+  pull_request:
+    paths:
+      - 'android/jev-guard/**'
+      - '.github/workflows/jev-guard-android.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android/jev-guard
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Build debug APK
+        run: gradle assembleDebug
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: jev-guard-debug-apk
+          path: android/jev-guard/app/build/outputs/apk/debug/app-debug.apk
