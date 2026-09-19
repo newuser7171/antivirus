@@ -120,3 +120,9 @@ python cli.py bulk-urls https://domain1.com https://domain2.com/payload.exe urls
 # Audit all running Windows system processes in 1 batch call (< 2 seconds):
 python cli.py bulk-edr --tier fast
 ```
+
+
+## Android apps
+
+- [Jev Guard Android project](android/jev-guard/) — existing Kotlin project and release workflow.
+- [Jev Guard native preview](android/jev-guard-native/) — self-contained Java scanner with Jev and VirusTotal connections, encrypted keys, scan history, source and a [tested APK download](android/jev-guard-native/downloads/Jev-Guard-0.1.0.apk?raw=true).
