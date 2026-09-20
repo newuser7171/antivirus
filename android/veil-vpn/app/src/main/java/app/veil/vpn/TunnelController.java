@@ -16,6 +16,7 @@ final class TunnelController implements Tunnel {
     private GoBackend backend;
     private volatile ShieldVpnService service;
     volatile boolean up=false, busy=false;
+    private volatile boolean stopRequested=false;
     volatile String status="Disconnected";
     volatile long rx=0,tx=0,handshake=0;
     private TunnelController(Context c){context=c; secrets=new SecretStore(c); worker.scheduleWithFixedDelay(this::poll,3,3,TimeUnit.SECONDS);}
@@ -40,19 +41,19 @@ final class TunnelController implements Tunnel {
     synchronized void connect(ShieldVpnService s){
         service=s;
         if(up||busy)return;
-        busy=true;status="Starting tunnel…";
+        stopRequested=false;busy=true;rx=0;tx=0;handshake=0;status="Starting tunnel…";
         worker.execute(()->{
             try {
                 if(backend==null)backend=new GoBackend(context);
                 backend.setState(this,State.UP,ProfilePolicy.apply(ProfilePolicy.parse(secrets.get("profile")),mode()));
                 status="Tunnel active · waiting for handshake";
             }catch(Exception e){status="Connection failed. Check your profile, VPN permission and network.";up=false;s.stopSelf();}
-            finally{busy=false;}
+            finally{busy=false;if(stopRequested)disconnect();}
         });
     }
     synchronized void disconnect(){
-        if(busy)return;
-        busy=true;status="Disconnecting…";
+        if(busy){stopRequested=true;return;}
+        stopRequested=false;busy=true;status="Disconnecting…";
         worker.execute(()->{
             try{if(backend!=null)backend.setState(this,State.DOWN,null);status="Disconnected";}
             catch(Exception e){status="Could not stop tunnel. Use Android VPN settings.";}
