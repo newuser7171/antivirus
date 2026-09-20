@@ -8,7 +8,7 @@ import javax.crypto.spec.GCMParameterSpec;
 final class SecretStore {
  private final Context c;
  SecretStore(Context c){this.c=c;}
- private javax.crypto.SecretKey key() throws Exception {
+ private synchronized javax.crypto.SecretKey key() throws Exception {
   KeyStore s=KeyStore.getInstance("AndroidKeyStore");s.load(null);
   if(!s.containsAlias("veil.keys")) {
    KeyGenerator g=KeyGenerator.getInstance("AES","AndroidKeyStore");

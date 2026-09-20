@@ -126,3 +126,5 @@ python cli.py bulk-edr --tier fast
 
 - [Jev Guard Android project](android/jev-guard/) — existing Kotlin project and release workflow.
 - [Jev Guard native preview](android/jev-guard-native/) — self-contained Java scanner with Jev and VirusTotal connections, encrypted keys, scan history, source and a [tested APK download](android/jev-guard-native/downloads/Jev-Guard-0.1.0.apk?raw=true).
+
+- [Veil — Jev-powered VPN + DNS ad blocker](android/veil-vpn/) — import a WireGuard profile, ask Jev for a filtering recommendation, then review and apply it. Requires your own VPN server/provider; Jev needs a personal TypeSafe key. [APK builds and device checks](https://github.com/newuser7171/antivirus/actions/workflows/veil-android.yml).
