@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Jev Humanizer</title><link rel="stylesheet" href="style.css"></head>
+<body><main>
+<header><div class="brand"><span class="mark" aria-hidden="true">j.</span><div>JEV HUMANIZER<small>Keep your meaning. Find your voice.</small></div></div><button id="full" class="quiet">Open editor ↗</button></header>
+<section class="intro"><span class="eyebrow">A LITTLE LESS ROBOTIC</span><h1>Make it sound<br>like you.</h1><p>Light edits on your device. Thoughtful checks with Jev.</p></section>
+<section class="card"><div class="row"><label for="source">Your text</label><button id="selection" class="quiet">Use selected text</button></div>
+<textarea id="source" maxlength="6000" rows="7" placeholder="Paste a paragraph you’d like to make clearer…" spellcheck="true"></textarea>
+<div class="row meta"><span id="count">0 words · 0 / 6,000 characters</span><button id="clear" class="quiet">Clear everything</button></div>
+<div class="row controls"><label for="tone">Tone <select id="tone"><option value="natural">Natural</option><option value="casual">Casual</option><option value="formal">Professional</option></select></label><button id="draft" class="primary">Make local edits</button></div>
+<p class="hint">English phrase edits, not an unrestricted AI rewrite. Quoted text, links and code stay untouched by local rules.</p>
+<details id="local-panel"><summary>Optional desktop AI rewrite</summary><p id="local-info">Checks whether your browser offers an on-device writing model. Not available on Android or Firefox.</p><label class="check"><input type="checkbox" id="download-consent"> Allow my browser to download its local writing model if needed.</label><button id="local-ai">Try browser AI</button></details>
+</section>
+<section id="drafts-section" class="card" hidden><div class="row"><label for="draft-choice">Your draft</label><select id="draft-choice"></select></div><textarea id="output" rows="7" readonly aria-label="Rewrite preview"></textarea><div class="row"><span id="draft-meta" class="meta"></span><button id="copy" class="primary">Copy draft</button></div><details><summary>What changed?</summary><ul id="changes"></ul></details></section>
+<section class="card jev"><div class="row"><h2>A second opinion, from Jev.</h2><span class="pill">OPTIONAL</span></div><p>Jev compares the drafts and checks whether the meaning survived. You decide what to use.</p>
+<label for="key">Your TypeSafe API key</label><input id="key" type="password" autocomplete="off" spellcheck="false" placeholder="Kept only while this editor is open">
+<label class="check"><input type="checkbox" id="consent"> Send my text, drafts and chosen tone to TypeSafe for this check. My API account’s charges may apply.</label>
+<div class="row"><button id="check" class="primary" disabled>Ask Jev to choose</button><button id="cancel" hidden>Cancel</button></div>
+<p id="assessment" class="hint">No API key is needed for local edits.</p><button id="apply" hidden>Preview Jev’s choice</button>
+<details id="scores-panel" hidden><summary>View model estimates</summary><pre id="scores"></pre></details></section>
+<p id="status" role="status" aria-live="polite">Ready when you are.</p>
+<footer>No detector-bypass promises. No automatic posting.<br>Text and keys are not saved. Copy your draft before closing.<br><a href="privacy.html" target="_blank" rel="noopener">Privacy & how it works</a> · <a href="https://console.typesafe.ai" target="_blank" rel="noopener noreferrer">TypeSafe account</a></footer>
+</main><script type="module" src="app.js"></script></body></html>
