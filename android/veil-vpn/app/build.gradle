@@ -2,7 +2,7 @@ plugins { id 'com.android.application' }
 android {
     namespace 'app.veil.vpn'
     compileSdk 35
-    defaultConfig { applicationId 'app.veil.vpn'; minSdk 30; targetSdk 35; versionCode 2; versionName '0.2.0'; testInstrumentationRunner 'android.test.InstrumentationTestRunner' }
+    defaultConfig { applicationId 'app.veil.vpn'; minSdk 30; targetSdk 35; versionCode 2; versionName '0.2.0'; testInstrumentationRunner 'app.veil.vpn.DeviceChecks' }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
     buildTypes { release { minifyEnabled false } }
     packaging { jniLibs { useLegacyPackaging = true; excludes += ['**/libwg.so', '**/libwg-quick.so'] }; resources { excludes += ['META-INF/LICENSE*', 'META-INF/NOTICE*'] } }

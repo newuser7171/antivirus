@@ -26,7 +26,20 @@ jobs:
         with:
           gradle-version: '8.11.1'
       - name: Test and build preview APK
-        run: gradle --no-daemon testDebugUnitTest assembleDebug
+        run: gradle --no-daemon testDebugUnitTest assembleDebug assembleDebugAndroidTest
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Device smoke test
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          arch: x86_64
+          target: default
+          disable-animations: true
+          script: bash android/veil-vpn/ci/device-check.sh
       - name: Upload APK and test results
         uses: actions/upload-artifact@v4
         with:
@@ -34,4 +47,5 @@ jobs:
           path: |
             android/veil-vpn/app/build/outputs/apk/debug/*.apk
             android/veil-vpn/app/build/test-results/testDebugUnitTest/*.xml
+            android/veil-vpn/app/build/device-results/result.txt
           if-no-files-found: error
