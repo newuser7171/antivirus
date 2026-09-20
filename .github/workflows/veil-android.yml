@@ -1,0 +1,35 @@
+name: Veil Jev Android
+on:
+  push:
+    paths: ['android/veil-vpn/**', '.github/workflows/veil-android.yml']
+  pull_request:
+    paths: ['android/veil-vpn/**', '.github/workflows/veil-android.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android/veil-vpn
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - name: Test and build preview APK
+        run: gradle --no-daemon testDebugUnitTest assembleDebug
+      - name: Upload APK and test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: Veil-Jev-VPN-0.2.0
+          path: |
+            android/veil-vpn/app/build/outputs/apk/debug/*.apk
+            android/veil-vpn/app/build/test-results/testDebugUnitTest/*.xml
+          if-no-files-found: error
