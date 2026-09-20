@@ -26,6 +26,7 @@ final class Scanner {
   JSONArray certificates=new JSONArray();
   if(pi.signingInfo!=null){android.content.pm.Signature[] sigs=pi.signingInfo.getApkContentsSigners();if(sigs!=null)for(android.content.pm.Signature sig:sigs){JSONObject cert=new JSONObject();cert.put("sha256",hex(MessageDigest.getInstance("SHA-256").digest(sig.toByteArray())));try{X509Certificate x=(X509Certificate)CertificateFactory.getInstance("X.509").generateCertificate(new ByteArrayInputStream(sig.toByteArray()));cert.put("subject",x.getSubjectX500Principal().getName());cert.put("expires",x.getNotAfter().toString());}catch(Exception ignored){}certificates.put(cert);}}
   JSONObject r=new JSONObject();r.put("id",UUID.randomUUID().toString());r.put("time",System.currentTimeMillis());r.put("label",label);r.put("package",pi.packageName);r.put("version",pi.versionName==null?"Unknown":pi.versionName);r.put("source",source);r.put("sha256",hash(f));r.put("bytes",f.length());r.put("target_sdk",ai.targetSdkVersion);r.put("permissions",new JSONArray(perms));r.put("accessibility",access);r.put("debuggable",debug);r.put("certificates",certificates);r.put("findings",new JSONArray(RiskRules.assess(perms,access,debug)));r.put("split_base_only",splits);
+  r.put("apk_evidence",ApkEvidence.inspect(f));
   return r;
  }
 }

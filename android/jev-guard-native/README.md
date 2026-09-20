@@ -4,7 +4,7 @@ A native Android APK inspection app with optional Jev/TypeSafe evidence review a
 
 ## Install and use
 
-1. Download [Jev-Guard-0.1.0.apk](downloads/Jev-Guard-0.1.0.apk?raw=true) and open it on your Android phone and allow installation from the browser/file app if Android requests it.
+1. Open `Jev-Guard-0.1.0.apk` on your Android phone and allow installation from the browser/file app if Android requests it.
 2. Open Jev Guard → Choose an APK, or Apps → select an installed application.
 3. Local inspection works immediately without an account.
 4. For Jev review, add your TypeSafe API key under Settings. For reputation lookup, add your own VirusTotal API key. Keys are not interchangeable. Provider access and quotas apply.
@@ -39,7 +39,7 @@ export ANDROID_SDK_ROOT=/path/to/android-sdk
 ./build.sh
 ```
 
-The dependency-free build uses Android's aapt2, D8, zipalign and apksigner. Output: `build/Jev-Guard-0.1.0.apk`. Signing keys are deliberately excluded from GitHub. The build creates a new local development key on first use. Reuse your original private signing key locally if you need in-place updates to the downloadable preview; otherwise Android requires uninstalling the old build before installing a differently signed one.
+The dependency-free build uses Android's aapt2, D8, zipalign and apksigner. Output: `build/Jev-Guard-0.1.0.apk`. The source bundle includes the personal-development signing key (password `android`) so subsequent local builds can update this same preview. Treat this as a development identity only; never use this key to publish a production app. Keep the source bundle private if you want to control updates to this preview.
 
 To publish a production product, first establish malware-detection validation, harden parsing and background lifecycle handling, obtain suitable API licensing, and use a separate private production signing identity. QUERY_ALL_PACKAGES is declared for the installed-app inspection feature; store distribution has its own eligibility requirements.
 
@@ -57,3 +57,13 @@ See `VERIFICATION.md` for the validation performed on this build.
 - Android PackageManager: https://developer.android.com/reference/android/content/pm/PackageManager
 
 Independent project; not affiliated with TypeSafe or VirusTotal.
+
+## 0.2.0 — Jev detector port
+
+The Android app now adapts root `jev_scanner.py`: Jev Choice verdict (clean, suspicious_pua, malicious, plus insufficient_evidence), Score severity 0–4, and four Noul indicators (packing/obfuscation, C2/download, persistence, injection/evasion). It works using a TypeSafe key alone; VirusTotal is optional. Rescan older reports, then choose **Scan with Jev**.
+
+New APK evidence: archive composition, up to 16 MiB of decompressed entry samples (2 MiB/entry, 256 entries), per-entry entropy, code-string references, and embedded domain names without URL paths/query strings. The cloud confirmation previews exactly what is sent. Entry names and domains may identify application internals. Content is never executed. This is byte/string inspection, not a DEX call graph or sandbox. Unused libraries and benign APIs can match; limitations and partial coverage are included in model state.
+
+Verdicts are explicitly AI assessments. The repository's triage thresholds are adapted to recommendations only: avoid installation or manual review, never automatic quarantine/deletion. Missing/malformed API answers fail visibly rather than manufacturing a clean result. Low-confidence benign results require manual review. Old review-priority results are not reinterpreted as malware verdicts.
+
+Build with JDK 17, Gradle 8.11.1 and SDK 35: `gradle assembleRelease`. CI tests parser rejection, uncertainty policy, synthetic archive evidence and Android UI/storage/content parsing. Live model detection accuracy has not been measured: no user API key or labeled malware corpus is available. Windows EDR, process control, PDF/PE inspection and desktop quarantine are not ported.

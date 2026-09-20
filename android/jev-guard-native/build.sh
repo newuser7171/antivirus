@@ -6,7 +6,7 @@ BT="$SDK/build-tools/35.0.0"
 ANDROID="$SDK/platforms/android-35/android.jar"
 mkdir -p build/classes build/dex
 "$BT/aapt2" compile --dir app/src/main/res -o build/resources.zip
-"$BT/aapt2" link -o build/resources.apk -I "$ANDROID" --manifest app/src/main/AndroidManifest.xml --min-sdk-version 28 --target-sdk-version 35 build/resources.zip
+"$BT/aapt2" link -o build/resources.apk -I "$ANDROID" --manifest app/src/main/AndroidManifest.xml --min-sdk-version 28 --target-sdk-version 35 --rename-manifest-package ai.jevguard --version-code 2 --version-name 0.2.0 build/resources.zip
 java com.sun.tools.javac.Main -encoding UTF-8 -source 8 -target 8 -Xlint:-options -classpath "$ANDROID" -d build/classes app/src/main/java/ai/jevguard/*.java
 java sun.tools.jar.Main cf build/classes.jar -C build/classes .
 "$BT/d8" --lib "$ANDROID" --min-api 28 --output build/dex build/classes.jar
@@ -16,6 +16,6 @@ cp build/resources.apk build/unsigned.apk
 if [ ! -f development-signing.jks ]; then
  keytool -genkeypair -keystore development-signing.jks -storepass android -keypass android -alias jevguard -keyalg RSA -keysize 3072 -validity 10000 -dname 'CN=Jev Guard Personal Preview' >/dev/null 2>&1
 fi
-"$BT/apksigner" sign --ks development-signing.jks --ks-key-alias jevguard --ks-pass pass:android --key-pass pass:android --out build/Jev-Guard-0.1.0.apk build/aligned.apk
-"$BT/apksigner" verify --verbose build/Jev-Guard-0.1.0.apk
-"$BT/aapt" dump badging build/Jev-Guard-0.1.0.apk | head -15
+"$BT/apksigner" sign --ks development-signing.jks --ks-key-alias jevguard --ks-pass pass:android --key-pass pass:android --out build/Jev-Guard-0.2.0.apk build/aligned.apk
+"$BT/apksigner" verify --verbose build/Jev-Guard-0.2.0.apk
+"$BT/aapt" dump badging build/Jev-Guard-0.2.0.apk | head -15
